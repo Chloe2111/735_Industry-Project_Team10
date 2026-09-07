@@ -1,0 +1,14 @@
+# Never commit real credentials
+Secrets.java
+
+# Maven build output
+target/
+
+# VS Code / editor files
+.vscode/
+*.iml
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
