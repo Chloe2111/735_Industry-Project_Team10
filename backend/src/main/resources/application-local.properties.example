@@ -1,0 +1,13 @@
+# Copy this file to "application-local.properties" in this same folder and
+# fill in your real connection string. application-local.properties is
+# listed in .gitignore, so it will never be committed -- same idea as the
+# frontend's .env / .env.example split. Never paste a real password into
+# a committed file (this one included) or into chat.
+#
+# Run with this profile active:
+#   mvn spring-boot:run -Dspring-boot.run.profiles=local
+#
+# Or skip this file entirely and export MONGO_URI as an environment
+# variable instead -- application.properties already reads from it.
+
+spring.data.mongodb.uri=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<database>?appName=Cluster0
