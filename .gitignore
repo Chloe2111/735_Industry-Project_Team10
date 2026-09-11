@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+target/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Spring Boot local secrets
+application-local.properties
+
+# Test output
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
