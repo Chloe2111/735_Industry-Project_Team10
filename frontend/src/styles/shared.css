@@ -8,6 +8,15 @@
   margin: 0 auto;
 }
 
+.page-card--wide {
+  max-width: none;
+  margin: 0 0 1.25rem;
+}
+
+.page-card--wide:last-child {
+  margin-bottom: 0;
+}
+
 .btn {
   border-radius: var(--radius-sm);
   padding: 0.6rem 1.15rem;
