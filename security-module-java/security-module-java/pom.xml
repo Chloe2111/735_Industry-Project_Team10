@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.vcnity</groupId>
+  <artifactId>security-module</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <name>VCNITY Security and Privacy Module</name>
+  <description>
+    Security and privacy guardrail layer for the VCNITY AI analysis
+    pipeline (Java port of the JS/Python version).
+  </description>
+
+  <properties>
+    <maven.compiler.source>17</maven.compiler.source>
+    <maven.compiler.target>17</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <!-- Only dependency in the whole project, and it's test-only.
+         Everything in src/main has zero third-party dependencies on
+         purpose: JSON handling and the HTTP client/server are done
+         with plain JDK classes (see json/JsonUtil.java and Server.java). -->
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.13.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>security-module</finalName>
+    <plugins>
+      <!-- Makes `mvn package` produce a jar you can run directly with
+           `java -jar target/security-module.jar` (runs PipelineDemo). -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.1</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>vcnity.pipeline.PipelineDemo</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+
+      <!-- Lets you run any of the three entry points with
+           `mvn compile exec:java -Dexec.mainClass=...` without
+           building a jar first. -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.4.1</version>
+        <configuration>
+          <mainClass>vcnity.pipeline.PipelineDemo</mainClass>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
