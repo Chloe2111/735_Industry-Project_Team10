@@ -1,12 +1,10 @@
-import { ToastProvider } from './components/Toast/ToastProvider'
+import { ToastProvider } from "./components/Toast/ToastProvider";
+import CommunityWorkspace from "./components/Community/CommunityWorkspace";
 
 export default function App() {
   return (
     <ToastProvider>
-      <div className="page-card">
-        <h1>Client portal</h1>
-        <p>Basic setup only — features build out from here.</p>
-      </div>
+      <CommunityWorkspace />
     </ToastProvider>
-  )
+  );
 }
