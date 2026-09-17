@@ -7,10 +7,12 @@ import {
   reportDetails,
   reports as seedReports,
 } from '../data/portalSeed'
+import { apiClient } from './apiClient'
 
-// In-memory store standing in for the real backend, which has no commission
-// or report endpoints yet. Each function resolves `{ data }` like apiClient
-// so swapping to a real `apiClient.get/post` call later is a one-line change.
+// In-memory store standing in for the real backend, which doesn't have
+// listing/report endpoints yet (createCommission below is the one function
+// that's wired to a real endpoint). Each function resolves `{ data }` like
+// apiClient so swapping the rest over later is a one-line change per function.
 const state = {
   commissions: [...seedCommissions],
   reports: [...seedReports],
@@ -25,14 +27,6 @@ function resolveAfterDelay(data) {
   })
 }
 
-function slugify(title) {
-  return title
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-}
-
 export function getDashboardSummary() {
   return resolveAfterDelay({ stats: dashboardStats, activity: recentActivity })
 }
@@ -41,17 +35,11 @@ export function listCommissions() {
   return resolveAfterDelay(state.commissions)
 }
 
-export function createCommission(payload) {
-  const commission = {
-    id: slugify(payload.title) || `commission-${state.commissions.length + 1}`,
-    title: payload.title,
-    assignedGroup: null,
-    incentive: payload.incentive,
-    tier: payload.tier,
-    status: 'OPEN',
-  }
-  state.commissions = [commission, ...state.commissions]
-  return resolveAfterDelay(commission)
+// Real endpoint (see backend/src/main/java/com/vcnity/backend/commission) --
+// unlike the rest of this file, not backed by the in-memory mock store.
+export async function createCommission(payload) {
+  const commission = await apiClient.post('/commissions', payload)
+  return { data: commission }
 }
 
 export function listReports() {

@@ -19,14 +19,39 @@ function toggleValue(list, value) {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
 }
 
+function validate(form) {
+  const errors = {}
+
+  if (!form.title.trim()) {
+    errors.title = 'Project title is required.'
+  }
+
+  if (!form.incentive || Number(form.incentive) <= 0) {
+    errors.incentive = 'Enter an incentive amount greater than zero.'
+  }
+
+  if (form.groups.length === 0) {
+    errors.groups = 'Select at least one group.'
+  }
+
+  return errors
+}
+
 export function PostCommissionPage() {
   const toast = useToast()
   const [form, setForm] = useState(INITIAL_FORM)
+  const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [posted, setPosted] = useState(false)
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }))
+    setErrors((current) => {
+      if (!current[field]) return current
+      const next = { ...current }
+      delete next[field]
+      return next
+    })
   }
 
   function handleSaveDraft() {
@@ -35,16 +60,31 @@ export function PostCommissionPage() {
 
   async function handleSubmit(event) {
     event.preventDefault()
+
+    const validationErrors = validate(form)
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors)
+      return
+    }
+
+    setErrors({})
     setSubmitting(true)
     try {
       await createCommission({
-        title: form.title,
-        incentive: Number(form.incentive) || 0,
+        title: form.title.trim(),
+        description: form.description.trim(),
+        incentive: Number(form.incentive),
+        deadline: form.deadline,
         tier: form.tier,
+        groups: form.groups,
+        reportFormats: form.reportFormats,
       })
       setPosted(true)
-    } catch {
-      toast.error('Could not post the commission. Please try again.')
+    } catch (error) {
+      if (error.fieldErrors && Object.keys(error.fieldErrors).length > 0) {
+        setErrors(error.fieldErrors)
+      }
+      toast.error(error.message || 'Could not post the commission. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -52,6 +92,7 @@ export function PostCommissionPage() {
 
   function handlePostAnother() {
     setForm(INITIAL_FORM)
+    setErrors({})
     setPosted(false)
   }
 
@@ -79,7 +120,7 @@ export function PostCommissionPage() {
       <h1>Post a new commission</h1>
       <p className="post-commission-page__subtitle">Posting as [Council 1]</p>
 
-      <form className="page-card post-commission-page__form" onSubmit={handleSubmit}>
+      <form className="page-card post-commission-page__form" onSubmit={handleSubmit} noValidate>
         <div className="form-field">
           <label htmlFor="title">Project title</label>
           <input
@@ -88,8 +129,14 @@ export function PostCommissionPage() {
             placeholder="e.g. Skate Park Design Consultation"
             value={form.title}
             onChange={(event) => updateField('title', event.target.value)}
-            required
+            aria-invalid={Boolean(errors.title)}
+            aria-describedby={errors.title ? 'title-error' : undefined}
           />
+          {errors.title && (
+            <p className="form-field__error" id="title-error">
+              {errors.title}
+            </p>
+          )}
         </div>
 
         <div className="form-field">
@@ -113,7 +160,14 @@ export function PostCommissionPage() {
               placeholder="e.g. 3,200"
               value={form.incentive}
               onChange={(event) => updateField('incentive', event.target.value)}
+              aria-invalid={Boolean(errors.incentive)}
+              aria-describedby={errors.incentive ? 'incentive-error' : undefined}
             />
+            {errors.incentive && (
+              <p className="form-field__error" id="incentive-error">
+                {errors.incentive}
+              </p>
+            )}
           </div>
           <div className="form-field">
             <label htmlFor="deadline">Response deadline</label>
@@ -145,6 +199,7 @@ export function PostCommissionPage() {
               {option.label}
             </label>
           ))}
+          {errors.tier && <p className="form-field__error">{errors.tier}</p>}
         </fieldset>
 
         <div className="form-row form-row--checkboxes">
@@ -160,6 +215,7 @@ export function PostCommissionPage() {
                 {option}
               </label>
             ))}
+            {errors.groups && <p className="form-field__error">{errors.groups}</p>}
           </fieldset>
 
           <fieldset className="form-field">
