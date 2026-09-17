@@ -1,0 +1,21 @@
+# vernacularTerms.txt
+#
+# ============================================================
+# DO NOT USE THESE PLACEHOLDER ENTRIES IN A REAL PILOT OR
+# PRODUCTION RUN.
+# ============================================================
+#
+# Closes DEF-1 from the blind-spot test: lowercase relational/kinship
+# words used as identifying references. Same governance rule as
+# communityGazetteer.txt — must be community-reviewed before real use.
+#
+# Format: one term per line, case-insensitive, matched on whole words.
+
+aunty
+auntie
+uncle
+elder
+mob
+nan
+nanna
+pop
