@@ -12,5 +12,22 @@ target/
 # OS files
 .DS_Store
 Thumbs.db
+<<<<<<< HEAD
 # Frontend dependencies
 node_modules/ 
+=======
+# Python virtual environments and generated files
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+application-local.properties
+
+# Temporary Microsoft Word files
+~$*
+>>>>>>> origin/main

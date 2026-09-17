@@ -1,0 +1,19 @@
+# community_gazetteer.txt
+#
+# ============================================================
+# DO NOT USE THESE PLACEHOLDER ENTRIES IN A REAL PILOT OR
+# PRODUCTION RUN.
+# ============================================================
+#
+# This file must be built WITH the community whose material this
+# pipeline processes — not invented by the research/dev team.
+#
+# Format: one term per line, case-insensitive, matched on whole words.
+# Lines starting with # are ignored.
+#
+# --- placeholder examples below, for testing the CODE only ---
+
+Riverbend Community Hall
+Wattle Creek
+the old crossing
+Emu Flats
