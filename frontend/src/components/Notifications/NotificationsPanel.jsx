@@ -46,7 +46,7 @@ export function NotificationsPanel({ notifications, onMarkAllRead }) {
                   : 'notifications-panel__item'
               }
             >
-              {item.unread && <span className="notifications-panel__dot" aria-hidden="true" />}
+              <span className="notifications-panel__dot" aria-hidden="true" />
               <Link to={item.to} className="notifications-panel__body">
                 <span className="notifications-panel__title">{item.title}</span>
                 <span className="notifications-panel__subtitle">{item.subtitle}</span>

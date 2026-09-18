@@ -213,66 +213,74 @@ export function PostCommissionPage() {
     const complete = questionnaireComplete(answers)
     return (
       <div className="post-commission-page">
-        <button type="button" className="post-commission-page__back" onClick={() => setStep('details')}>
-          &lsaquo; Back to commission details
-        </button>
-        <h1>Find the right groups</h1>
-        <p className="post-commission-page__subtitle">
-          Answer a few questions so VCNITY can identify which community groups are most relevant to your commission.
-        </p>
-
-        <div className="post-commission-page__questionnaire">
-          <div className="page-card post-commission-page__question-card">
-            <span className="post-commission-page__question-number">1 / 4</span>
-            <h2>Which age group is most relevant to this commission?</h2>
-            <p className="post-commission-page__question-hint">Select all that apply.</p>
-            <PillOptions
-              options={ageGroupOptions}
-              value={answers.ageGroups}
-              multi
-              onChange={(value) => setAnswers((current) => ({ ...current, ageGroups: value }))}
-            />
-          </div>
-
-          <div className="page-card post-commission-page__question-card">
-            <span className="post-commission-page__question-number">2 / 4</span>
-            <h2>What is the primary topic area?</h2>
-            <p className="post-commission-page__question-hint">Choose the closest match.</p>
-            <PillOptions
-              options={topicAreaOptions}
-              value={answers.topicArea}
-              onChange={(value) => setAnswers((current) => ({ ...current, topicArea: value }))}
-            />
-          </div>
-
-          <div className="page-card post-commission-page__question-card">
-            <span className="post-commission-page__question-number">3 / 4</span>
-            <h2>What type of community voice are you seeking?</h2>
-            <p className="post-commission-page__question-hint">Select all that apply.</p>
-            <PillOptions
-              options={communityVoiceOptions}
-              value={answers.voiceTypes}
-              multi
-              onChange={(value) => setAnswers((current) => ({ ...current, voiceTypes: value }))}
-            />
-          </div>
-
-          <div className="page-card post-commission-page__question-card">
-            <span className="post-commission-page__question-number">4 / 4</span>
-            <h2>What is the geographic or community scope?</h2>
-            <p className="post-commission-page__question-hint">Choose the closest match.</p>
-            <PillOptions
-              options={geographicScopeOptions}
-              value={answers.scope}
-              onChange={(value) => setAnswers((current) => ({ ...current, scope: value }))}
-            />
-          </div>
-        </div>
-
-        <div className="post-commission-page__actions post-commission-page__actions--right">
-          <button type="button" className="btn btn--primary" disabled={!complete || analysing} onClick={handleAnalyse}>
-            {analysing ? 'Analysing…' : '\u{1F50D} Analyse & suggest groups'}
+        <div className="post-commission-page__step">
+          <button type="button" className="post-commission-page__back" onClick={() => setStep('details')}>
+            &lsaquo; Back to commission details
           </button>
+          <h1>Find the right groups</h1>
+          <p className="post-commission-page__subtitle">
+            Answer a few questions so VCNITY can identify which community groups are most relevant to your
+            commission.
+          </p>
+
+          <div className="post-commission-page__questionnaire">
+            <div className="page-card post-commission-page__question-card">
+              <span className="post-commission-page__question-number">1 / 4</span>
+              <h2>Which age group is most relevant to this commission?</h2>
+              <p className="post-commission-page__question-hint">Select all that apply.</p>
+              <PillOptions
+                options={ageGroupOptions}
+                value={answers.ageGroups}
+                multi
+                onChange={(value) => setAnswers((current) => ({ ...current, ageGroups: value }))}
+              />
+            </div>
+
+            <div className="page-card post-commission-page__question-card">
+              <span className="post-commission-page__question-number">2 / 4</span>
+              <h2>What is the primary topic area?</h2>
+              <p className="post-commission-page__question-hint">Choose the closest match.</p>
+              <PillOptions
+                options={topicAreaOptions}
+                value={answers.topicArea}
+                onChange={(value) => setAnswers((current) => ({ ...current, topicArea: value }))}
+              />
+            </div>
+
+            <div className="page-card post-commission-page__question-card">
+              <span className="post-commission-page__question-number">3 / 4</span>
+              <h2>What type of community voice are you seeking?</h2>
+              <p className="post-commission-page__question-hint">Select all that apply.</p>
+              <PillOptions
+                options={communityVoiceOptions}
+                value={answers.voiceTypes}
+                multi
+                onChange={(value) => setAnswers((current) => ({ ...current, voiceTypes: value }))}
+              />
+            </div>
+
+            <div className="page-card post-commission-page__question-card">
+              <span className="post-commission-page__question-number">4 / 4</span>
+              <h2>What is the geographic or community scope?</h2>
+              <p className="post-commission-page__question-hint">Choose the closest match.</p>
+              <PillOptions
+                options={geographicScopeOptions}
+                value={answers.scope}
+                onChange={(value) => setAnswers((current) => ({ ...current, scope: value }))}
+              />
+            </div>
+          </div>
+
+          <div className="post-commission-page__actions post-commission-page__actions--right">
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={!complete || analysing}
+              onClick={handleAnalyse}
+            >
+              {analysing ? 'Analysing…' : '\u{1F50D} Analyse & suggest groups'}
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -281,71 +289,74 @@ export function PostCommissionPage() {
   if (step === 'groups') {
     return (
       <div className="post-commission-page">
-        <button type="button" className="post-commission-page__back" onClick={() => setStep('questionnaire')}>
-          &lsaquo; Back to questionnaire
-        </button>
-        <h1>AI-suggested groups</h1>
-        <p className="post-commission-page__subtitle">
-          Based on your answers, VCNITY identified these groups as the best match. Confirm your selection or add others.
-        </p>
+        <div className="post-commission-page__step">
+          <button type="button" className="post-commission-page__back" onClick={() => setStep('questionnaire')}>
+            &lsaquo; Back to questionnaire
+          </button>
+          <h1>AI-suggested groups</h1>
+          <p className="post-commission-page__subtitle">
+            Based on your answers, VCNITY identified these groups as the best match. Confirm your selection or add
+            others.
+          </p>
 
-        <div className="post-commission-page__groups">
-          {suggestedGroups.map((group) => (
-            <label key={group.id} className="page-card post-commission-page__group-card">
-              <input
-                type="checkbox"
-                checked={selectedGroupIds.has(group.id)}
-                onChange={() => toggleGroupSelected(group.id)}
-              />
-              <div className="post-commission-page__group-body">
-                <div className="post-commission-page__group-header">
-                  <span className="post-commission-page__group-name">{group.name}</span>
-                  <span className={matchBadgeClass(group.matchPercent)}>{group.matchPercent}% match</span>
+          <div className="post-commission-page__groups">
+            {suggestedGroups.map((group) => (
+              <label key={group.id} className="page-card post-commission-page__group-card">
+                <input
+                  type="checkbox"
+                  checked={selectedGroupIds.has(group.id)}
+                  onChange={() => toggleGroupSelected(group.id)}
+                />
+                <div className="post-commission-page__group-body">
+                  <div className="post-commission-page__group-header">
+                    <span className="post-commission-page__group-name">{group.name}</span>
+                    <span className={matchBadgeClass(group.matchPercent)}>{group.matchPercent}% match</span>
+                  </div>
+                  <p className="post-commission-page__group-reason">{group.reason}</p>
                 </div>
-                <p className="post-commission-page__group-reason">{group.reason}</p>
-              </div>
-            </label>
-          ))}
-        </div>
+              </label>
+            ))}
+          </div>
 
-        <div className="page-card post-commission-page__add-groups">
-          <label htmlFor="group-search">Add more groups</label>
-          <input
-            id="group-search"
-            type="text"
-            placeholder="Search groups by name…"
-            value={groupSearch}
-            onChange={(event) => setGroupSearch(event.target.value)}
-          />
-          {searchResults.length > 0 && (
-            <ul className="post-commission-page__search-results">
-              {searchResults.map((group) => (
-                <li key={group.id}>
-                  <button type="button" onClick={() => addGroupFromSearch(group)}>
-                    {group.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+          <div className="page-card post-commission-page__add-groups">
+            <label htmlFor="group-search">Add more groups</label>
+            <input
+              id="group-search"
+              type="text"
+              placeholder="Search groups by name…"
+              value={groupSearch}
+              onChange={(event) => setGroupSearch(event.target.value)}
+            />
+            {searchResults.length > 0 && (
+              <ul className="post-commission-page__search-results">
+                {searchResults.map((group) => (
+                  <li key={group.id}>
+                    <button type="button" onClick={() => addGroupFromSearch(group)}>
+                      {group.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-        {groupsError && <p className="form-field__error">{groupsError}</p>}
+          {groupsError && <p className="form-field__error">{groupsError}</p>}
 
-        <div className="post-commission-page__actions post-commission-page__actions--split">
-          <span className="post-commission-page__selected-count">{selectedGroupIds.size} groups selected</span>
-          <div className="post-commission-page__actions-buttons">
-            <button type="button" className="btn btn--secondary" onClick={handleSaveDraft}>
-              Save as draft
-            </button>
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={selectedGroupIds.size === 0 || submitting}
-              onClick={handleSubmit}
-            >
-              {submitting ? 'Posting…' : 'Post commission'}
-            </button>
+          <div className="post-commission-page__actions post-commission-page__actions--split">
+            <span className="post-commission-page__selected-count">{selectedGroupIds.size} groups selected</span>
+            <div className="post-commission-page__actions-buttons">
+              <button type="button" className="btn btn--secondary" onClick={handleSaveDraft}>
+                Save as draft
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={selectedGroupIds.size === 0 || submitting}
+                onClick={handleSubmit}
+              >
+                {submitting ? 'Posting…' : 'Post commission'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -354,98 +365,104 @@ export function PostCommissionPage() {
 
   return (
     <div className="post-commission-page">
-      <h1>Post a new commission</h1>
-      <p className="post-commission-page__subtitle">Posting as [Council 1]</p>
+      <div className="post-commission-page__step">
+        <h1>Post a new commission</h1>
+        <p className="post-commission-page__subtitle">Posting as [Council 1]</p>
 
-      <form className="page-card post-commission-page__form" onSubmit={handleNextFromDetails} noValidate>
-        <div className="form-field">
-          <label htmlFor="title">Project title</label>
-          <input
-            id="title"
-            type="text"
-            placeholder="e.g. Skate Park Design Consultation"
-            value={form.title}
-            onChange={(event) => updateField('title', event.target.value)}
-            aria-invalid={Boolean(errors.title)}
-            aria-describedby={errors.title ? 'title-error' : undefined}
-          />
-          {errors.title && (
-            <p className="form-field__error" id="title-error">
-              {errors.title}
-            </p>
-          )}
-        </div>
-
-        <div className="form-field">
-          <label htmlFor="description">Description</label>
-          <textarea
-            id="description"
-            rows={3}
-            placeholder="What do you need feedback or evidence on?"
-            value={form.description}
-            onChange={(event) => updateField('description', event.target.value)}
-          />
-        </div>
-
-        <div className="form-row">
+        <form className="page-card post-commission-page__form" onSubmit={handleNextFromDetails} noValidate>
           <div className="form-field">
-            <label htmlFor="incentive">Incentive</label>
+            <label htmlFor="title">Project title</label>
             <input
-              id="incentive"
-              type="number"
-              min="0"
-              placeholder="e.g. 3,200"
-              value={form.incentive}
-              onChange={(event) => updateField('incentive', event.target.value)}
-              aria-invalid={Boolean(errors.incentive)}
-              aria-describedby={errors.incentive ? 'incentive-error' : undefined}
+              id="title"
+              type="text"
+              placeholder="e.g. Skate Park Design Consultation"
+              value={form.title}
+              onChange={(event) => updateField('title', event.target.value)}
+              aria-invalid={Boolean(errors.title)}
+              aria-describedby={errors.title ? 'title-error' : undefined}
             />
-            {errors.incentive && (
-              <p className="form-field__error" id="incentive-error">
-                {errors.incentive}
+            {errors.title && (
+              <p className="form-field__error" id="title-error">
+                {errors.title}
               </p>
             )}
           </div>
+
           <div className="form-field">
-            <label htmlFor="deadline">Response deadline</label>
-            <select id="deadline" value={form.deadline} onChange={(event) => updateField('deadline', event.target.value)}>
-              {deadlineOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            <label htmlFor="description">Description</label>
+            <textarea
+              id="description"
+              rows={3}
+              placeholder="What do you need feedback or evidence on?"
+              value={form.description}
+              onChange={(event) => updateField('description', event.target.value)}
+            />
           </div>
-        </div>
 
-        <div className="post-commission-page__tier-notice">
-          <span aria-hidden="true">&#9432;</span>
-          <p>
-            Data sensitivity tier is assigned automatically. VCNITY&rsquo;s AI will classify the appropriate tier based
-            on your project description and the type of community groups involved. You will be notified of the
-            assigned tier before the commission goes live.
-          </p>
-        </div>
+          <div className="form-row">
+            <div className="form-field">
+              <label htmlFor="incentive">Incentive</label>
+              <input
+                id="incentive"
+                type="number"
+                min="0"
+                placeholder="e.g. 3,200"
+                value={form.incentive}
+                onChange={(event) => updateField('incentive', event.target.value)}
+                aria-invalid={Boolean(errors.incentive)}
+                aria-describedby={errors.incentive ? 'incentive-error' : undefined}
+              />
+              {errors.incentive && (
+                <p className="form-field__error" id="incentive-error">
+                  {errors.incentive}
+                </p>
+              )}
+            </div>
+            <div className="form-field">
+              <label htmlFor="deadline">Response deadline</label>
+              <select
+                id="deadline"
+                value={form.deadline}
+                onChange={(event) => updateField('deadline', event.target.value)}
+              >
+                {deadlineOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-        <div className="form-field">
-          <label>Report format you&rsquo;d like back</label>
-          <PillOptions
-            options={reportFormatOptions}
-            value={form.reportFormats}
-            multi
-            onChange={(value) => updateField('reportFormats', value)}
-          />
-        </div>
+          <div className="post-commission-page__tier-notice">
+            <span aria-hidden="true">&#9432;</span>
+            <p>
+              Data sensitivity tier is assigned automatically. VCNITY&rsquo;s AI will classify the appropriate tier
+              based on your project description and the type of community groups involved. You will be notified of
+              the assigned tier before the commission goes live.
+            </p>
+          </div>
 
-        <div className="post-commission-page__actions">
-          <button type="button" className="btn btn--secondary" onClick={handleSaveDraft}>
-            Save as draft
-          </button>
-          <button type="submit" className="btn btn--primary">
-            Next: find groups &rsaquo;
-          </button>
-        </div>
-      </form>
+          <div className="form-field">
+            <label>Report format you&rsquo;d like back</label>
+            <PillOptions
+              options={reportFormatOptions}
+              value={form.reportFormats}
+              multi
+              onChange={(value) => updateField('reportFormats', value)}
+            />
+          </div>
+
+          <div className="post-commission-page__actions">
+            <button type="button" className="btn btn--secondary" onClick={handleSaveDraft}>
+              Save as draft
+            </button>
+            <button type="submit" className="btn btn--primary">
+              Next: find groups &rsaquo;
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
