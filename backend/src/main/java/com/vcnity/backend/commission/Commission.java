@@ -15,7 +15,10 @@ public class Commission {
     private String description;
     private double incentive;
     private String deadline;
+
+    // null == pending AI classification; no classifier is wired in yet.
     private String tier;
+
     private List<String> groups;
     private List<String> reportFormats;
     private String assignedGroup;

@@ -15,7 +15,9 @@ public class CommissionService {
     }
 
     public Commission create(CreateCommissionRequest request) {
-        if (!ALLOWED_TIERS.contains(request.getTier())) {
+        // Null tier means "pending AI classification" -- only checked
+        // against the allowed set when the caller actually supplies one.
+        if (request.getTier() != null && !ALLOWED_TIERS.contains(request.getTier())) {
             throw new InvalidCommissionFieldException(
                     "tier", "Tier must be one of: Tier 1, Tier 2, Tier 3.");
         }

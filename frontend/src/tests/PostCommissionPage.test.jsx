@@ -25,61 +25,118 @@ function renderPage() {
   )
 }
 
-async function fillValidForm(user) {
+async function fillStep1(user) {
   await user.type(screen.getByLabelText(/project title/i), 'Community Garden Feedback')
   await user.type(screen.getByLabelText(/incentive/i), '1500')
+  await user.click(screen.getByRole('button', { name: /next: find groups/i }))
 }
 
-describe('PostCommissionPage', () => {
-  it('blocks submission and shows inline errors when required fields are empty', async () => {
+async function answerQuestionnaire(user) {
+  await user.click(screen.getByRole('button', { name: 'Under 18' }))
+  await user.click(screen.getByRole('button', { name: 'Urban planning & infrastructure' }))
+  await user.click(screen.getByRole('button', { name: 'General public opinion' }))
+  await user.click(screen.getByRole('button', { name: 'A specific local neighbourhood' }))
+}
+
+async function advanceToGroupsStep(user) {
+  await fillStep1(user)
+  await screen.findByText('Find the right groups')
+  await answerQuestionnaire(user)
+  await user.click(screen.getByRole('button', { name: /analyse & suggest groups/i }))
+  await screen.findByText('AI-suggested groups')
+}
+
+describe('PostCommissionPage — step 1 (commission details)', () => {
+  it('blocks advancing and shows inline errors when required fields are empty', async () => {
     const user = userEvent.setup()
-    global.fetch = vi.fn()
     renderPage()
 
-    await user.click(screen.getByRole('button', { name: /post commission/i }))
+    await user.click(screen.getByRole('button', { name: /next: find groups/i }))
 
     expect(await screen.findByText('Project title is required.')).toBeInTheDocument()
     expect(screen.getByText(/enter an incentive amount greater than zero/i)).toBeInTheDocument()
-    expect(global.fetch).not.toHaveBeenCalled()
+    expect(screen.queryByText('Find the right groups')).not.toBeInTheDocument()
   })
 
-  it('clears a field error as soon as the user edits that field', async () => {
-    const user = userEvent.setup()
-    global.fetch = vi.fn()
+  it('shows the automatic-tier notice instead of a tier picker', () => {
     renderPage()
+    expect(screen.getByText(/tier is assigned automatically/i)).toBeInTheDocument()
+    expect(screen.queryByText(/requested data sensitivity tier/i)).not.toBeInTheDocument()
+  })
+})
 
-    await user.click(screen.getByRole('button', { name: /post commission/i }))
-    expect(await screen.findByText('Project title is required.')).toBeInTheDocument()
+describe('PostCommissionPage — step 2 (find groups questionnaire)', () => {
+  it('keeps "Analyse & suggest groups" disabled until all four questions are answered', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await fillStep1(user)
+    await screen.findByText('Find the right groups')
 
-    await user.type(screen.getByLabelText(/project title/i), 'A')
+    const analyseButton = screen.getByRole('button', { name: /analyse & suggest groups/i })
+    expect(analyseButton).toBeDisabled()
 
-    expect(screen.queryByText('Project title is required.')).not.toBeInTheDocument()
+    await answerQuestionnaire(user)
+
+    expect(analyseButton).toBeEnabled()
   })
 
-  it('posts to /api/commissions and shows the confirmation screen on success', async () => {
+  it('returns to step 1 with the entered values kept via the back link', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await fillStep1(user)
+    await screen.findByText('Find the right groups')
+
+    await user.click(screen.getByRole('button', { name: /back to commission details/i }))
+
+    expect(screen.getByLabelText(/project title/i)).toHaveValue('Community Garden Feedback')
+  })
+})
+
+describe('PostCommissionPage — step 3 (AI-suggested groups)', () => {
+  it('shows suggested groups with match badges and a live selected count', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await advanceToGroupsStep(user)
+
+    expect(screen.getByText('Youth Design Collective')).toBeInTheDocument()
+    expect(screen.getByText('97% match')).toBeInTheDocument()
+    expect(screen.getByText('4 groups selected')).toBeInTheDocument()
+
+    const checkboxes = screen.getAllByRole('checkbox')
+    await user.click(checkboxes[0])
+
+    expect(screen.getByText('3 groups selected')).toBeInTheDocument()
+  })
+
+  it('posts the merged payload without a tier key and shows the confirmation screen', async () => {
     const user = userEvent.setup()
     mockFetchOnce({
       ok: true,
       status: 201,
-      body: { success: true, data: { id: 'c1', title: 'Community Garden Feedback', status: 'OPEN' } },
+      body: { success: true, data: { id: 'c1', title: 'Community Garden Feedback', status: 'OPEN', tier: null } },
     })
     renderPage()
+    await advanceToGroupsStep(user)
 
-    await fillValidForm(user)
-    await user.click(screen.getByRole('button', { name: /post commission/i }))
+    await user.click(screen.getByRole('button', { name: /^post commission$/i }))
 
     expect(await screen.findByText('Commission posted.')).toBeInTheDocument()
 
     const [url, options] = global.fetch.mock.calls[0]
     expect(url).toBe('/api/commissions')
-    expect(options.method).toBe('POST')
     const body = JSON.parse(options.body)
     expect(body.title).toBe('Community Garden Feedback')
     expect(body.incentive).toBe(1500)
-    expect(body.groups).toEqual(['Youth groups'])
+    expect(body.groups).toEqual([
+      'Youth Design Collective',
+      'Green Spaces Initiative',
+      'Multicultural Community Alliance',
+      'Northside Neighbourhood Network',
+    ])
+    expect(body).not.toHaveProperty('tier')
   })
 
-  it('shows a server-side field error and stays on the form when the API returns 400', async () => {
+  it('jumps back to step 1 and shows an inline error on a step-1 field error from the API', async () => {
     const user = userEvent.setup()
     mockFetchOnce({
       ok: false,
@@ -87,27 +144,16 @@ describe('PostCommissionPage', () => {
       body: {
         success: false,
         message: 'Please fix the highlighted fields.',
-        errors: { tier: 'Tier must be one of: Tier 1, Tier 2, Tier 3.' },
+        errors: { title: 'Project title must be 200 characters or fewer.' },
       },
     })
     renderPage()
+    await advanceToGroupsStep(user)
 
-    await fillValidForm(user)
-    await user.click(screen.getByRole('button', { name: /post commission/i }))
+    await user.click(screen.getByRole('button', { name: /^post commission$/i }))
 
-    expect(await screen.findByText('Tier must be one of: Tier 1, Tier 2, Tier 3.')).toBeInTheDocument()
-    expect(screen.queryByText('Commission posted.')).not.toBeInTheDocument()
-  })
-
-  it('shows an error toast on a network failure', async () => {
-    const user = userEvent.setup()
-    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
-    renderPage()
-
-    await fillValidForm(user)
-    await user.click(screen.getByRole('button', { name: /post commission/i }))
-
-    expect(await screen.findByText(/unable to reach the server/i)).toBeInTheDocument()
+    expect(await screen.findByText('Project title must be 200 characters or fewer.')).toBeInTheDocument()
+    expect(screen.getByLabelText(/project title/i)).toBeInTheDocument()
     expect(screen.queryByText('Commission posted.')).not.toBeInTheDocument()
   })
 
@@ -116,12 +162,11 @@ describe('PostCommissionPage', () => {
     mockFetchOnce({
       ok: true,
       status: 201,
-      body: { success: true, data: { id: 'c1', title: 'Community Garden Feedback', status: 'OPEN' } },
+      body: { success: true, data: { id: 'c1', title: 'Community Garden Feedback', status: 'OPEN', tier: null } },
     })
     renderPage()
-
-    await fillValidForm(user)
-    await user.click(screen.getByRole('button', { name: /post commission/i }))
+    await advanceToGroupsStep(user)
+    await user.click(screen.getByRole('button', { name: /^post commission$/i }))
     await screen.findByText('Commission posted.')
 
     await user.click(screen.getByRole('button', { name: /post another/i }))

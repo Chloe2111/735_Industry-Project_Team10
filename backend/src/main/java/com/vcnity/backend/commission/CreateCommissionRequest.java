@@ -10,10 +10,12 @@ import java.util.List;
 /**
  * Request body for POST /api/commissions.
  *
- * "tier" is intentionally left as a plain @NotBlank string here rather than
- * an enum-backed constraint: an invalid value needs to come back as a
- * field-level "tier" error alongside the Bean Validation ones, which
- * CommissionService checks and CommissionController maps the same way.
+ * "tier" is optional: the client no longer picks it (VCNITY's AI is meant
+ * to classify it), and there's no classifier wired in yet, so it's left
+ * null ("pending classification") when omitted. When it IS present, it
+ * still needs to be one of Tier 1/2/3 -- checked in CommissionService
+ * rather than with an enum-backed constraint, so an invalid value comes
+ * back as a field-level "tier" error the same way Bean Validation ones do.
  */
 public class CreateCommissionRequest {
 
@@ -31,7 +33,6 @@ public class CreateCommissionRequest {
     @NotBlank(message = "Response deadline is required.")
     private String deadline;
 
-    @NotBlank(message = "Requested data sensitivity tier is required.")
     private String tier;
 
     @NotEmpty(message = "Select at least one group.")

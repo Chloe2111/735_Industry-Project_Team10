@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { ToastProvider } from '../components/Toast/ToastProvider'
@@ -48,6 +49,24 @@ describe('portal pages render without crashing', () => {
     expect(await screen.findByText('Skate Park Design Consultation')).toBeInTheDocument()
     expect(screen.getByText('1. Safety and accessibility of the skate area')).toBeInTheDocument()
     expect(screen.getByText('67%')).toBeInTheDocument()
+  })
+
+  it('ReportDetailPage opens the Source Evidence panel from a finding with sources', async () => {
+    const user = userEvent.setup()
+    render(
+      withProviders(
+        <Routes>
+          <Route path="/reports-received/:reportId" element={<ReportDetailPage />} />
+        </Routes>,
+        '/reports-received/skate-park-design-consultation',
+      ),
+    )
+    await screen.findByText('1. Safety and accessibility of the skate area')
+
+    await user.click(screen.getByRole('button', { name: /trace back to source/i }))
+
+    expect(await screen.findByText('Source evidence')).toBeInTheDocument()
+    expect(screen.getByText('SRV-014')).toBeInTheDocument()
   })
 
   it('ReportDetailPage handles an unknown report id gracefully', async () => {

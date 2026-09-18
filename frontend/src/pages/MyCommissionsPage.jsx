@@ -31,7 +31,11 @@ const COLUMNS = [
   },
   { key: 'assignedGroup', header: 'Assigned group', render: (row) => row.assignedGroup ?? '—' },
   { key: 'incentive', header: 'Incentive', render: (row) => `$${row.incentive.toLocaleString()}` },
-  { key: 'tier', header: 'Tier' },
+  {
+    key: 'tier',
+    header: 'Tier',
+    render: (row) => row.tier ?? <span className="my-commissions-page__tier-pending">Pending</span>,
+  },
   { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
 ]
 

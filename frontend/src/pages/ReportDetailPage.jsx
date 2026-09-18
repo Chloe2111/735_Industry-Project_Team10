@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { FindingAccordion } from '../components/Accordion/FindingAccordion'
+import { SourceEvidencePanel } from '../components/SourceEvidence/SourceEvidencePanel'
 import { getReport } from '../services/portalService'
 import { useToast } from '../components/Toast/ToastProvider'
 import './ReportDetailPage.css'
@@ -9,6 +10,7 @@ export function ReportDetailPage() {
   const { reportId } = useParams()
   const toast = useToast()
   const [report, setReport] = useState(undefined)
+  const [activeSources, setActiveSources] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -90,9 +92,15 @@ export function ReportDetailPage() {
         <p className="report-detail-page__findings-intro">{report.findingsIntro}</p>
         <FindingAccordion
           findings={report.findings}
-          onTraceBack={() => toast.info('Trace back to source is coming soon.')}
+          onTraceBack={(finding) =>
+            finding.sources?.length > 0
+              ? setActiveSources(finding.sources)
+              : toast.info('Trace back to source is coming soon.')
+          }
         />
       </div>
+
+      {activeSources && <SourceEvidencePanel sources={activeSources} onClose={() => setActiveSources(null)} />}
     </div>
   )
 }

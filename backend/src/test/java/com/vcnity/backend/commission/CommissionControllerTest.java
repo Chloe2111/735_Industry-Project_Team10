@@ -30,25 +30,26 @@ class CommissionControllerTest {
     @MockBean
     private CommissionService commissionService;
 
+    // No "tier" key: the client no longer picks one (VCNITY's AI is meant
+    // to classify it later), so a request without it must still succeed.
     private Map<String, Object> validRequestBody() {
         return Map.of(
                 "title", "Skate Park Design Consultation",
                 "description", "What do you need feedback on?",
                 "incentive", 3200,
                 "deadline", "12 weeks from posting",
-                "tier", "Tier 1",
                 "groups", List.of("Youth groups"),
                 "reportFormats", List.of("Executive summary"));
     }
 
     @Test
-    void validRequestReturns201WithCreatedCommission() throws Exception {
+    void validRequestWithNoTierReturns201WithPendingTier() throws Exception {
         Commission saved = new Commission(
                 "Skate Park Design Consultation",
                 "What do you need feedback on?",
                 3200,
                 "12 weeks from posting",
-                "Tier 1",
+                null,
                 List.of("Youth groups"),
                 List.of("Executive summary"));
         when(commissionService.create(any())).thenReturn(saved);
@@ -59,7 +60,8 @@ class CommissionControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.title").value("Skate Park Design Consultation"))
-                .andExpect(jsonPath("$.data.status").value("OPEN"));
+                .andExpect(jsonPath("$.data.status").value("OPEN"))
+                .andExpect(jsonPath("$.data.tier").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test

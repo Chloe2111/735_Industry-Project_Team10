@@ -128,6 +128,109 @@ export const reportDetails = {
           'Thematic coding applied to qualitative responses; survey data aggregated with frequency counts. AI flagged one quote for potential identification — facilitator reviewed and paraphrased before submission.',
         deliverableStatus: 'Complete — all flags resolved',
         sourceCount: 5,
+        sources: [
+          {
+            id: 'SRV-014',
+            type: 'Survey response',
+            method: 'Online survey',
+            quote: "The ramp near the entrance has a crack that I've tripped on twice. It needs fixing before anything else.",
+            agreementPercent: 78,
+            participantsAgreed: 37,
+            participantsTotal: 47,
+            flagged: false,
+            ageRange: '14–22 years old',
+            genderBreakdown: [
+              { label: 'male', percent: 58 },
+              { label: 'female', percent: 34 },
+              { label: 'non-binary', percent: 8 },
+            ],
+            culturalBackgrounds: ['Anglo-Australian', 'East Asian', 'South Asian', 'Pacific Islander'],
+            whyItMatters:
+              'Physical safety hazards were the single most cited barrier to park use. This quote captures a direct, recurring structural risk mentioned across 37 of 47 participants. It directly supports the finding’s recommendation for infrastructure audit as the first priority.',
+            themes: ['Safety hazard', 'Infrastructure', 'Urgency'],
+          },
+          {
+            id: 'SRV-031',
+            type: 'Survey response',
+            method: 'Online survey',
+            quote: 'Lighting is really bad at night — feels unsafe after 6pm, especially in winter.',
+            agreementPercent: 64,
+            participantsAgreed: 30,
+            participantsTotal: 47,
+            flagged: false,
+            ageRange: '15–24 years old',
+            genderBreakdown: [
+              { label: 'male', percent: 41 },
+              { label: 'female', percent: 52 },
+              { label: 'non-binary', percent: 7 },
+            ],
+            culturalBackgrounds: ['Anglo-Australian', 'South Asian', 'Middle Eastern'],
+            whyItMatters:
+              'Lighting concerns were consistently linked to evening and winter use, pointing to a distinct safety gap from the entrance-ramp issue above. Supports a secondary recommendation on lighting upgrades.',
+            themes: ['Safety hazard', 'Lighting', 'Evening access'],
+          },
+          {
+            id: 'INT-002',
+            type: 'Interview transcript',
+            method: 'Individual interview',
+            quote:
+              '[Paraphrased by facilitator] Participant described feeling excluded from the main bowl area due to skill level and perceived social dynamics.',
+            agreementPercent: 53,
+            participantsAgreed: 25,
+            participantsTotal: 47,
+            flagged: true,
+            ageRange: '16–19 years old',
+            genderBreakdown: [
+              { label: 'male', percent: 30 },
+              { label: 'female', percent: 62 },
+              { label: 'non-binary', percent: 8 },
+            ],
+            culturalBackgrounds: ['Anglo-Australian', 'East Asian'],
+            whyItMatters:
+              'Social-inclusion barriers were harder to surface than physical ones and only emerged through interview, not survey, responses. AI flagged the original quote as potentially identifying; the facilitator paraphrased it before inclusion.',
+            themes: ['Inclusivity', 'Skill level', 'Social dynamics'],
+          },
+          {
+            id: 'OBS-007',
+            type: 'Sticky-note wall',
+            method: 'In-person drop-in',
+            quote: '"No helmet rack" — written by participant during drop-in session.',
+            agreementPercent: 47,
+            participantsAgreed: 22,
+            participantsTotal: 47,
+            flagged: false,
+            ageRange: '12–20 years old',
+            genderBreakdown: [
+              { label: 'male', percent: 55 },
+              { label: 'female', percent: 40 },
+              { label: 'non-binary', percent: 5 },
+            ],
+            culturalBackgrounds: ['Anglo-Australian', 'Pacific Islander'],
+            whyItMatters:
+              'A small but recurring amenity gap raised independently across multiple sticky notes. Included as a low-cost, high-visibility fix alongside the larger infrastructure recommendations.',
+            themes: ['Amenity', 'Infrastructure'],
+          },
+          {
+            id: 'SRV-058',
+            type: 'Survey response',
+            method: 'Online survey',
+            quote: 'Wheelchair access at the side gate is blocked by a permanent barrier. Nobody seems to know who put it there.',
+            agreementPercent: 38,
+            participantsAgreed: 18,
+            participantsTotal: 47,
+            flagged: false,
+            ageRange: '17–25 years old',
+            genderBreakdown: [
+              { label: 'male', percent: 44 },
+              { label: 'female', percent: 50 },
+              { label: 'non-binary', percent: 6 },
+            ],
+            culturalBackgrounds: ['Anglo-Australian', 'South Asian'],
+            whyItMatters:
+              'A smaller group raised this, but it describes an outright access barrier rather than a preference, which is why it is retained as a distinct accessibility finding rather than folded into the general safety theme.',
+            themes: ['Accessibility', 'Infrastructure'],
+          },
+        ],
       },
       {
         id: 'finding-2',
@@ -142,6 +245,7 @@ export const reportDetails = {
           'Frequency-ranked feature list cross-checked against drop-in votes; no identification flags raised.',
         deliverableStatus: 'Complete — no flags raised',
         sourceCount: 8,
+        sources: [],
       },
       {
         id: 'finding-3',
@@ -156,6 +260,7 @@ export const reportDetails = {
           'Gap identified for younger (12–14) and female respondents; one interview quote flagged for potential identification and paraphrased by the facilitator before inclusion.',
         deliverableStatus: 'Complete — all flags resolved',
         sourceCount: 3,
+        sources: [],
       },
     ],
   },
@@ -209,8 +314,82 @@ export const deadlineOptions = [
   '12 weeks from posting',
 ]
 
-export const tierOptions = [
-  { value: 'Tier 1', label: 'Tier 1 — public feedback' },
-  { value: 'Tier 2', label: 'Tier 2 — includes personal information' },
-  { value: 'Tier 3', label: 'Tier 3 — sensitive or vulnerable groups' },
+export const ageGroupOptions = ['Under 18', '18–25', '26–40', '41–60', 'Over 60', 'All ages']
+
+export const topicAreaOptions = [
+  'Urban planning & infrastructure',
+  'Environment & green spaces',
+  'Arts, culture & heritage',
+  'Community services & wellbeing',
+  'Youth, education & development',
+  'Health & safety',
+]
+
+export const communityVoiceOptions = [
+  'General public opinion',
+  'Lived experience from specific groups',
+  "Young people's perspectives",
+  'Culturally diverse voices',
+  'Environmental advocates',
+  'Any / open to all',
+]
+
+export const geographicScopeOptions = [
+  'A specific local neighbourhood',
+  'City-wide',
+  'Regional or state-wide',
+  'No geographic restriction',
+]
+
+// The 4 shown as "AI-suggested" in the design are first; the rest exist so
+// the "Add more groups" search in step 3 has somewhere to look.
+export const groupCatalog = [
+  {
+    id: 'youth-design-collective',
+    name: 'Youth Design Collective',
+    matchPercent: 97,
+    reason: 'Specialises in youth-led urban design input. Age range 16-25 matches your target cohort.',
+  },
+  {
+    id: 'green-spaces-initiative',
+    name: 'Green Spaces Initiative',
+    matchPercent: 84,
+    reason: 'Covers outdoor recreation and infrastructure — relevant to skate park context.',
+  },
+  {
+    id: 'multicultural-community-alliance',
+    name: 'Multicultural Community Alliance',
+    matchPercent: 71,
+    reason: 'Provides culturally diverse voices, particularly for public space inclusion.',
+  },
+  {
+    id: 'northside-neighbourhood-network',
+    name: 'Northside Neighbourhood Network',
+    matchPercent: 63,
+    reason: 'Local residents group near the proposed site. Geographically relevant.',
+  },
+  {
+    id: 'river-care-volunteers',
+    name: 'River Care Volunteers',
+    matchPercent: 58,
+    reason: 'Environmental landcare group active in nearby waterway corridors.',
+  },
+  {
+    id: 'elders-advisory-circle',
+    name: 'Elders Advisory Circle',
+    matchPercent: 55,
+    reason: 'Provides intergenerational perspective on shared community spaces.',
+  },
+  {
+    id: 'accessible-city-network',
+    name: 'Accessible City Network',
+    matchPercent: 52,
+    reason: 'Advocates for accessibility in public infrastructure projects.',
+  },
+  {
+    id: 'local-business-forum',
+    name: 'Local Business Forum',
+    matchPercent: 44,
+    reason: 'Represents nearby traders with an interest in foot traffic and amenity.',
+  },
 ]

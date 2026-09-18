@@ -9,10 +9,37 @@
   margin: 0;
 }
 
-.post-commission-page__tier-hint {
+.post-commission-page__back {
+  display: inline-block;
+  background: none;
+  border: none;
+  padding: 0;
   color: var(--color-brand);
-  font-size: 0.8rem;
-  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+}
+
+.post-commission-page__back:hover {
+  text-decoration: underline;
+}
+
+.post-commission-page__tier-notice {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  background: #fdf3e0;
+  border: 1px solid #eddcb0;
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.1rem;
+  color: #7a5a12;
+  font-size: 0.85rem;
+}
+
+.post-commission-page__tier-notice p {
+  margin: 0;
 }
 
 .post-commission-page__actions {
@@ -20,6 +47,10 @@
   justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 0.5rem;
+}
+
+.post-commission-page__actions--right {
+  max-width: 40rem;
 }
 
 .post-commission-page--centered {
@@ -43,4 +74,170 @@
   justify-content: center;
   gap: 0.75rem;
   margin-top: 1.25rem;
+}
+
+/* Step 2: questionnaire */
+
+.post-commission-page__questionnaire {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 40rem;
+  margin-bottom: 1rem;
+}
+
+.post-commission-page__question-card {
+  margin: 0;
+  max-width: none;
+}
+
+.post-commission-page__question-number {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.post-commission-page__question-card h2 {
+  font-size: 0.95rem;
+  margin: 0 0 0.2rem;
+}
+
+.post-commission-page__question-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+/* Step 3: suggested groups */
+
+.post-commission-page__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 40rem;
+  margin-bottom: 1rem;
+}
+
+.post-commission-page__group-card {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin: 0;
+  max-width: none;
+  cursor: pointer;
+}
+
+.post-commission-page__group-card input[type='checkbox'] {
+  margin-top: 0.3rem;
+}
+
+.post-commission-page__group-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.post-commission-page__group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.post-commission-page__group-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.post-commission-page__group-reason {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.post-commission-page__match {
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  white-space: nowrap;
+}
+
+.post-commission-page__match--high {
+  background: #dff3e3;
+  color: #1a7a3c;
+}
+
+.post-commission-page__match--medium {
+  background: #fbe9c8;
+  color: #8a5a10;
+}
+
+.post-commission-page__match--low {
+  background: #fbdada;
+  color: #a3312f;
+}
+
+.post-commission-page__add-groups {
+  max-width: 40rem;
+  margin: 0 0 0.75rem;
+  position: relative;
+}
+
+.post-commission-page__add-groups label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.post-commission-page__add-groups input {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.9rem;
+}
+
+.post-commission-page__search-results {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.post-commission-page__search-results li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.post-commission-page__search-results button {
+  width: 100%;
+  text-align: left;
+  background: var(--color-surface);
+  border: none;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.post-commission-page__search-results button:hover {
+  background: #f7f2e8;
+}
+
+.post-commission-page__actions--split {
+  justify-content: space-between;
+  align-items: center;
+  max-width: 40rem;
+}
+
+.post-commission-page__selected-count {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.post-commission-page__actions-buttons {
+  display: flex;
+  gap: 0.75rem;
 }

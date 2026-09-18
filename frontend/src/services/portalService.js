@@ -2,6 +2,7 @@ import {
   account,
   commissions as seedCommissions,
   dashboardStats,
+  groupCatalog,
   notifications as seedNotifications,
   recentActivity,
   reportDetails,
@@ -40,6 +41,15 @@ export function listCommissions() {
 export async function createCommission(payload) {
   const commission = await apiClient.post('/commissions', payload)
   return { data: commission }
+}
+
+// Stands in for a real AI group-matching endpoint, which doesn't exist yet
+// -- always returns the same top 4 catalog groups regardless of the
+// questionnaire answers passed in, since there's no matching engine to
+// vary the result meaningfully. Swap for a real call once one exists.
+export function suggestGroups(answers) {
+  void answers
+  return resolveAfterDelay(groupCatalog.slice(0, 4))
 }
 
 export function listReports() {
