@@ -14,6 +14,7 @@ public class CommunityGroup {
     private String name;
     private String description;
     private String category;
+    private String privacy;
     private String createdBy;
     private LocalDateTime createdAt;
 
@@ -24,6 +25,7 @@ public class CommunityGroup {
         this.name = name;
         this.description = description;
         this.category = category;
+        this.privacy = "public";
         this.createdBy = createdBy;
         this.createdAt = LocalDateTime.now();
     }
@@ -58,6 +60,14 @@ public class CommunityGroup {
 
     public void setCategory(String category) {
         this.category = category;
+    }
+
+    public String getPrivacy() {
+        return privacy;
+    }
+
+    public void setPrivacy(String privacy) {
+        this.privacy = privacy;
     }
 
     public String getCreatedBy() {

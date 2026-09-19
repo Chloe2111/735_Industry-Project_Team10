@@ -23,10 +23,21 @@ public class CommunityGroupController {
     public ResponseEntity<CommunityGroup> createGroup(
             @RequestBody CommunityGroup group) {
 
+        if (group.getName() == null ||
+                group.getName().isBlank() ||
+                group.getDescription() == null ||
+                group.getDescription().isBlank() ||
+                group.getCategory() == null ||
+                group.getCategory().isBlank()) {
+
+            return ResponseEntity.badRequest().build();
+        }
+
         CommunityGroup createdGroup = groupService.createGroup(group);
 
         return ResponseEntity
-                .created(URI.create("/api/community/groups/" + createdGroup.getId()))
+                .created(URI.create(
+                        "/api/community/groups/" + createdGroup.getId()))
                 .body(createdGroup);
     }
 

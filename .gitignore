@@ -31,3 +31,4 @@ application-local.properties
 # Temporary Microsoft Word files
 ~$*
 >>>>>>> origin/main
+dist/

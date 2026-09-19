@@ -24,15 +24,20 @@ public class CommunityPostController {
     public ResponseEntity<CommunityPost> createPost(
             @RequestBody CommunityPost post) {
 
-        if (post.getUserId() == null ||
-                post.getUserId().isBlank() ||
-                post.getTitle() == null ||
-                post.getTitle().isBlank() ||
-                post.getContent() == null ||
-                post.getContent().isBlank()) {
+        if (post.getGroupId() == null ||
+        post.getGroupId().isBlank() ||
+        post.getUserId() == null ||
+        post.getUserId().isBlank() ||
+        post.getTitle() == null ||
+        post.getTitle().isBlank() ||
+        post.getContent() == null ||
+        post.getContent().isBlank()) {
 
-            return ResponseEntity.badRequest().build();
-        }
+    return ResponseEntity.badRequest().build();
+}
+        
+
+            
 
         return postService.createPost(post)
                 .map(createdPost ->

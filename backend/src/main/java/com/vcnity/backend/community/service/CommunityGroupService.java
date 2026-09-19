@@ -4,6 +4,7 @@ import com.vcnity.backend.community.model.CommunityGroup;
 import com.vcnity.backend.community.repository.CommunityGroupRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,6 +19,13 @@ public class CommunityGroupService {
 
     // Create a new community group
     public CommunityGroup createGroup(CommunityGroup group) {
+        // Server-owned metadata must not depend on values supplied by the browser.
+        group.setId(null);
+        group.setName(group.getName().trim());
+        group.setDescription(group.getDescription().trim());
+        group.setCategory(group.getCategory().trim());
+        group.setPrivacy(group.getPrivacy() == null || group.getPrivacy().isBlank() ? "public" : group.getPrivacy().trim());
+        group.setCreatedAt(LocalDateTime.now());
         return groupRepository.save(group);
     }
 
@@ -40,6 +48,9 @@ public class CommunityGroupService {
             existingGroup.setName(updatedGroup.getName());
             existingGroup.setDescription(updatedGroup.getDescription());
             existingGroup.setCategory(updatedGroup.getCategory());
+            if (updatedGroup.getPrivacy() != null && !updatedGroup.getPrivacy().isBlank()) {
+                existingGroup.setPrivacy(updatedGroup.getPrivacy().trim());
+            }
 
             return groupRepository.save(existingGroup);
         });

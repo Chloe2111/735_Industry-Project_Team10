@@ -103,3 +103,12 @@ button { cursor:pointer; }
 .chat-button span { position:absolute; right:-3px; top:-5px; background:#ed6b2d; color:#fff; min-width:18px; height:18px; border-radius:999px; display:grid; place-items:center; font-size:10px; }
 @media(max-width:1000px){.dashboard-layout{grid-template-columns:1fr}.groups-grid{grid-template-columns:1fr}.group-view-layout,.profile-layout{grid-template-columns:1fr}.messages-page{grid-template-columns:1fr}.portal-nav{grid-template-columns:1fr;padding:14px 20px;gap:8px}.nav-links{justify-content:center;flex-wrap:wrap}.profile-button{justify-self:start}.side-column{display:grid;grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.standard-page,.form-page,.dashboard-layout,.messages-page{padding-left:16px;padding-right:16px}.side-column{display:flex}.search-row{grid-template-columns:1fr}.page-title-row,.group-hero,.profile-header-card{display:flex;flex-direction:column;align-items:flex-start}.portal-nav{display:flex;flex-direction:column;align-items:stretch}.nav-links button{padding:10px 8px}.profile-button{align-self:flex-end}.messages-page{display:block}.conversation-list,.chat-panel{border-radius:8px;margin-bottom:12px}}
+
+/* Story 17 group discovery and membership actions */
+.groups-section { margin-top:24px; }
+.section-heading-row { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:12px; }
+.section-heading-row h2 { margin:0 0 4px; }
+.section-heading-row p { margin:0; color:#777; }
+.group-card-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:15px; }
+.group-card-actions .secondary-button { margin-top:0; }
+.group-card-actions button:disabled { opacity:.6; cursor:not-allowed; }
