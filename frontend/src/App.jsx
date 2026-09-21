@@ -7,6 +7,7 @@ import { MyCommissionsPage } from './pages/MyCommissionsPage'
 import { ReportsReceivedPage } from './pages/ReportsReceivedPage'
 import { ReportDetailPage } from './pages/ReportDetailPage'
 import { MyAccountPage } from './pages/MyAccountPage'
+import { ExceptionsQueuePage } from './pages/ExceptionsQueuePage'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
             <Route path="my-commissions" element={<MyCommissionsPage />} />
             <Route path="reports-received" element={<ReportsReceivedPage />} />
             <Route path="reports-received/:reportId" element={<ReportDetailPage />} />
+            <Route path="exceptions-queue" element={<ExceptionsQueuePage />} />
             <Route path="account" element={<MyAccountPage />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
