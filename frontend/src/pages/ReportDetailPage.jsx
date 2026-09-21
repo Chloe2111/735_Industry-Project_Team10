@@ -15,13 +15,19 @@ export function ReportDetailPage() {
   useEffect(() => {
     let cancelled = false
     setReport(undefined)
-    getReport(reportId).then(({ data }) => {
-      if (!cancelled) setReport(data)
-    })
+    getReport(reportId)
+      .then(({ data }) => {
+        if (!cancelled) setReport(data)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        toast.error(error.message || 'Could not load this report. Please try again.')
+        setReport(null)
+      })
     return () => {
       cancelled = true
     }
-  }, [reportId])
+  }, [reportId, toast])
 
   if (report === undefined) return null
 
@@ -90,6 +96,12 @@ export function ReportDetailPage() {
 
         <h2 className="report-detail-page__section-title">Key findings</h2>
         <p className="report-detail-page__findings-intro">{report.findingsIntro}</p>
+        {report.withheldFindingsCount > 0 && (
+          <p className="report-detail-page__withheld-note">
+            {report.withheldFindingsCount} finding{report.withheldFindingsCount === 1 ? '' : 's'} withheld pending
+            linked evidence.
+          </p>
+        )}
         <FindingAccordion
           findings={report.findings}
           onTraceBack={(finding) =>

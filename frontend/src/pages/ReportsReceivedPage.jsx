@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { DataTable } from '../components/DataTable/DataTable'
 import { StatusBadge } from '../components/StatusBadge/StatusBadge'
 import { listReports } from '../services/portalService'
+import { useToast } from '../components/Toast/ToastProvider'
 import './ReportsReceivedPage.css'
 
 const COLUMNS = [
@@ -25,13 +26,18 @@ const COLUMNS = [
 ]
 
 export function ReportsReceivedPage() {
+  const toast = useToast()
   const [reports, setReports] = useState([])
 
   useEffect(() => {
     let cancelled = false
-    listReports().then(({ data }) => {
-      if (!cancelled) setReports(data)
-    })
+    listReports()
+      .then(({ data }) => {
+        if (!cancelled) setReports(data)
+      })
+      .catch((error) => {
+        if (!cancelled) toast.error(error.message || 'Could not load reports. Please try again.')
+      })
     return () => {
       cancelled = true
     }

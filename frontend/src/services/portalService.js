@@ -5,18 +5,15 @@ import {
   groupCatalog,
   notifications as seedNotifications,
   recentActivity,
-  reportDetails,
-  reports as seedReports,
 } from '../data/portalSeed'
-import { apiClient } from './apiClient'
+import { apiClient, ApiError } from './apiClient'
 
 // In-memory store standing in for the real backend, which doesn't have
-// listing/report endpoints yet (createCommission below is the one function
-// that's wired to a real endpoint). Each function resolves `{ data }` like
-// apiClient so swapping the rest over later is a one-line change per function.
+// listing/dashboard endpoints yet (createCommission/suggestGroups/reports
+// below are wired to real endpoints). Each function resolves `{ data }`
+// like apiClient so swapping the rest over later is a one-line change.
 const state = {
   commissions: [...seedCommissions],
-  reports: [...seedReports],
   notifications: seedNotifications.map((item) => ({ ...item })),
 }
 
@@ -52,12 +49,24 @@ export function suggestGroups(answers) {
   return resolveAfterDelay(groupCatalog.slice(0, 4))
 }
 
-export function listReports() {
-  return resolveAfterDelay(state.reports)
+// Real endpoints (see backend/src/main/java/com/vcnity/backend/report) --
+// backed by MongoDB, seeded with synthetic content since the AI pipeline
+// doesn't produce real report content yet.
+export async function listReports() {
+  const reports = await apiClient.get('/reports')
+  return { data: reports }
 }
 
-export function getReport(id) {
-  return resolveAfterDelay(reportDetails[id] ?? null)
+export async function getReport(id) {
+  try {
+    const report = await apiClient.get(`/reports/${id}`)
+    return { data: report }
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return { data: null }
+    }
+    throw error
+  }
 }
 
 export function getAccount() {
