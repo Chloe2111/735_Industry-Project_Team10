@@ -14,7 +14,7 @@ import java.util.List;
  *
  * Runs entirely on synthetic data. Uses the real Claude API if
  * ANTHROPIC_API_KEY is set in your environment, otherwise runs in mock
- * mode — clearly labelled either way.
+ * mode - clearly labelled either way.
  */
 public final class PipelineDemo {
 
@@ -31,13 +31,13 @@ public final class PipelineDemo {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         // Force UTF-8 output regardless of the host's default console
-        // encoding, so the — and other punctuation below always render
-        // correctly instead of turning into '?'.
+        // encoding, so punctuation below always renders correctly
+        // instead of turning into '?'.
         System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
 
         System.out.println();
         line('=', 72);
-        System.out.println("  VCNITY PIPELINE DEMO \u2014 SYNTHETIC DATA ONLY");
+        System.out.println("  VCNITY PIPELINE DEMO - SYNTHETIC DATA ONLY");
         System.out.println("  Mode: " + (PipelineCore.MOCK_MODE ? "MOCK (no ANTHROPIC_API_KEY set)" : "LIVE Claude API"));
         line('=', 72);
         System.out.println();

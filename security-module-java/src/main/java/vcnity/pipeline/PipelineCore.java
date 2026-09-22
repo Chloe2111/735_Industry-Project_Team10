@@ -24,7 +24,7 @@ import java.util.Set;
  * the demo runs out of the box without a key.
  *
  * Note: the live-API path talks to Claude with a hand-rolled HTTP call
- * (java.net.http.HttpClient) plus the tiny JsonUtil helper, on purpose —
+ * (java.net.http.HttpClient) plus the tiny JsonUtil helper, on purpose -
  * this keeps the guardrail module dependency-free. If you're already
  * using an official Anthropic Java SDK elsewhere in your codebase, feel
  * free to swap callClaude() to use it instead; nothing else here needs
@@ -58,7 +58,7 @@ public final class PipelineCore {
     }
 
     // ---------------------------------------------------------------------
-    // AI coding step — real Claude API if a key is available, else mock
+    // AI coding step - real Claude API if a key is available, else mock
     // ---------------------------------------------------------------------
 
     private static String codingPrompt(String text) {
@@ -150,7 +150,7 @@ public final class PipelineCore {
         for (Item item : items) {
             String itemId = item.itemId() != null ? item.itemId() : "<unknown>";
 
-            // Stage 1: tier gate — the ONLY place Tier 3 / untiered items
+            // Stage 1: tier gate - the ONLY place Tier 3 / untiered items
             // are checked.
             try {
                 TierGate.tierGate(item);
@@ -188,7 +188,7 @@ public final class PipelineCore {
     }
 
     // ---------------------------------------------------------------------
-    // Demo dataset — synthetic only, per the Runbook's staged approach
+    // Demo dataset - synthetic only, per the Runbook's staged approach
     // ---------------------------------------------------------------------
 
     public static List<Item> demoItems() {

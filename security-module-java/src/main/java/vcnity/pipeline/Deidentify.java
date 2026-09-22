@@ -31,7 +31,7 @@ import java.util.regex.Pattern;
  *
  * So this module runs standard pattern-based detectors (email, phone,
  * etc.) AND a project-specific gazetteer that the community itself must
- * review and populate — see communityGazetteer.txt. This module ships
+ * review and populate - see communityGazetteer.txt. This module ships
  * with only a placeholder gazetteer file: DO NOT deploy with the
  * placeholder entries. The real list must be built with, and signed off
  * by, the community whose material this is.
@@ -41,7 +41,7 @@ public final class Deidentify {
     public static final Pattern EMAIL_RE =
             Pattern.compile("[\\w.+-]+@[\\w-]+\\.[\\w-]+(?:\\.[\\w-]+)*");
 
-    // Australian mobile (04XX XXX XXX) or landline ((0X) XXXX XXXX) — loose
+    // Australian mobile (04XX XXX XXX) or landline ((0X) XXXX XXXX) - loose
     // pattern, tune for your real data / add international formats as needed
     public static final Pattern PHONE_RE = Pattern.compile(
             "(?:\\+?61[ -]?)?(?:\\(0\\)|0)?4\\d{2}[ -]?\\d{3}[ -]?\\d{3}\\b"
@@ -50,7 +50,7 @@ public final class Deidentify {
     );
 
     // Simple capitalised-multi-word heuristic for names not caught elsewhere
-    // (deliberately conservative — false positives are safer than false
+    // (deliberately conservative - false positives are safer than false
     // negatives here, since a human reviews every redaction)
     public static final Pattern CAPITALISED_NAME_RE =
             Pattern.compile("\\b[A-Z][a-z]+(?:\\s[A-Z][a-z]+){1,2}\\b");
@@ -120,7 +120,7 @@ public final class Deidentify {
 
     /**
      * Returns the original text, the redacted text, and the list of
-     * entities found. Keep the entities list — it's your audit trail
+     * entities found. Keep the entities list - it's your audit trail
      * for the privacy checklist sign-off, and it's how you catch
      * gazetteer gaps over time.
      */
@@ -135,7 +135,7 @@ public final class Deidentify {
 
         // Resolve overlaps: keep the longest match at each position.
         // (List.sort is stable, so ties keep the order entities were
-        // added above — same behaviour as the JS version's Array.sort.)
+        // added above - same behaviour as the JS version's Array.sort.)
         entities.sort((a, b) -> {
             int byStart = Integer.compare(a.start(), b.start());
             if (byStart != 0) {

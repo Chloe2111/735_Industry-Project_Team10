@@ -16,7 +16,7 @@ import java.util.List;
  * and this app can never show different behaviour.
  *
  * Built on the JDK's own com.sun.net.httpserver, so this runs with zero
- * extra dependencies — no Spring Boot needed for a one-page demo.
+ * extra dependencies - no Spring Boot needed for a one-page demo.
  *
  * Run locally:
  *     mvn compile exec:java -Dexec.mainClass=vcnity.pipeline.Server
@@ -73,7 +73,7 @@ public final class Server {
 
     private static String renderPage(List<Item> items, PipelineResult run) {
         String modeLabel = PipelineCore.MOCK_MODE
-                ? "Running in <strong>mock mode</strong> \u2014 no ANTHROPIC_API_KEY set. AI coding output is simulated."
+                ? "Running in <strong>mock mode</strong> - no ANTHROPIC_API_KEY set. AI coding output is simulated."
                 : "Running on the <strong>live Claude API</strong>.";
 
         StringBuilder itemCards = new StringBuilder();
@@ -121,7 +121,7 @@ public final class Server {
                 + "    .card p { margin: 4px 0; font-size: 0.92em; }\n"
                 + "  </style>\n</head>\n<body>\n"
                 + "  <h1>\ud83d\udd12 VCNITY Pipeline Demo</h1>\n"
-                + "  <p class=\"muted\">Synthetic data only \u2014 per the project's own governance rule: no real data until privacy officer + HREC sign-off.</p>\n"
+                + "  <p class=\"muted\">Synthetic data only - per the project's own governance rule: no real data until privacy officer + HREC sign-off.</p>\n"
                 + "  <div class=\"banner\">" + modeLabel + "</div>\n\n"
                 + "  <h3>Items entering the pipeline</h3>\n"
                 + "  <div class=\"chips\">" + itemCards + "</div>\n\n"
@@ -133,7 +133,7 @@ public final class Server {
         StringBuilder sb = new StringBuilder();
         for (Outcome o : outcomes) {
             sb.append("<div class=\"card\">\n    <strong>").append(o.itemId())
-                    .append("</strong> \u2014 ").append(o.theme() != null ? o.theme() : "").append("\n    ")
+                    .append("</strong> - ").append(o.theme() != null ? o.theme() : "").append("\n    ")
                     .append(o.reason() != null ? "<p><em>failed: " + o.reason() + "</em></p>" : "")
                     .append("\n    <p>Quote: \u201c").append(o.quote() != null ? o.quote() : "")
                     .append("\u201d</p>\n    <p>Confidence: ").append(o.confidence())

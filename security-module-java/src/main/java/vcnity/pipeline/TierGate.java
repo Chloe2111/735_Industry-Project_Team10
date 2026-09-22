@@ -14,7 +14,7 @@ import java.util.Set;
  * described the Tier 3 check happening partly at intake and partly as a
  * flag inside the grounding stage. A flag at the grounding stage implies
  * the item was ALREADY sent to a model to be coded/themed before anyone
- * noticed it was Tier 3 — which breaches the "never auto-processed" rule
+ * noticed it was Tier 3 - which breaches the "never auto-processed" rule
  * by definition, since grounding runs *after* coding.
  *
  * The fix: tierGate() is the literal first method call in the pipeline,
@@ -71,7 +71,7 @@ public final class TierGate {
         if (tier == null) {
             throw new TierGateException(
                     itemId,
-                    "no tier assigned. No untiered item may enter the pipeline — "
+                    "no tier assigned. No untiered item may enter the pipeline - "
                             + "tiering must happen, and be recorded, before intake.");
         }
 

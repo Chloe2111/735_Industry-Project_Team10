@@ -11,7 +11,7 @@ import static org.junit.Assert.assertNull;
 /**
  * Java has no JSON.parse/JSON.stringify built in like JS does, so this
  * project ships a tiny JSON helper for the optional live-Claude-API
- * path. These tests aren't in the original 26 — they're new coverage
+ * path. These tests aren't in the original 26 - they're new coverage
  * for this Java-only plumbing.
  */
 public class JsonUtilTest {

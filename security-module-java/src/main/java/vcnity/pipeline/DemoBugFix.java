@@ -30,7 +30,7 @@ public final class DemoBugFix {
 
         String source = "I felt that a really great sense of belonging came from it.";
         String fabricatedQuote = "a tarea"; // does not appear as real words anywhere
-        // in the source — but "thatareallygreat" (whitespace stripped)
+        // in the source - but "thatareallygreat" (whitespace stripped)
         // contains "atarea" as a substring, so the old logic is fooled.
 
         System.out.println("SOURCE TEXT:");
@@ -49,7 +49,7 @@ public final class DemoBugFix {
             System.out.println("through as 'clean'. The fixed logic correctly routes it to the");
             System.out.println("exceptions queue for human review instead.");
         } else {
-            System.out.println("Unexpected result \u2014 check the demo inputs.");
+            System.out.println("Unexpected result - check the demo inputs.");
         }
     }
 }

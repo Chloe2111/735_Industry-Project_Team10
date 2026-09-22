@@ -27,7 +27,7 @@ public final class Grounding {
     private Grounding() {
     }
 
-    /** Collapse whitespace and lowercase. Does NOT delete whitespace —
+    /** Collapse whitespace and lowercase. Does NOT delete whitespace -
      * that was the original bug. */
     public static String normalize(String text) {
         return text.trim().replaceAll("\\s+", " ").toLowerCase();
@@ -84,7 +84,7 @@ public final class Grounding {
         boolean tierViolation = codedItem.tier() != null && codedItem.tier() == 3;
 
         // Contradiction scan is intentionally a hook, not a full NLP
-        // model, for this MVP — wire in a real check before the real
+        // model, for this MVP - wire in a real check before the real
         // pilot.
         boolean contradiction = codedItem.contradictsPriorTheme();
 

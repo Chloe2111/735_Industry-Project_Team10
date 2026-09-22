@@ -90,7 +90,7 @@ public class GroundingTest {
 
     @Test
     public void tier3ItemReachingGroundingIsStillCaughtAsDefenseInDepth() {
-        // tierGate() should have already stopped this upstream — but
+        // tierGate() should have already stopped this upstream - but
         // grounding checks it too, as a second, independent layer.
         CodedItem codedItem = new CodedItem("I5", "SRC-1", "felt safe and welcoming", 0.9, 3);
         GroundResult result = Grounding.ground(codedItem, sourceLookup());

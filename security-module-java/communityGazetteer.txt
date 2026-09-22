@@ -6,7 +6,7 @@
 # ============================================================
 #
 # This file must be built WITH the community whose material this
-# pipeline processes — not invented by the research/dev team. Per the
+# pipeline processes - not invented by the research/dev team. Per the
 # project's own governance design, authority over what counts as
 # identifying or restricted information about a community sits with
 # that community, not with researchers.

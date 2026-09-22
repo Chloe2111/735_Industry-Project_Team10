@@ -24,7 +24,7 @@ public record GroundFlags(
         return sourceMissing || quoteNotGrounded || lowConfidence || tierViolation || contradiction;
     }
 
-    /** Names of the failed checks, in a fixed order, comma-separated —
+    /** Names of the failed checks, in a fixed order, comma-separated -
      * used for the "reason" shown in the exceptions queue. */
     public String failedNames() {
         List<String> names = new ArrayList<>();
