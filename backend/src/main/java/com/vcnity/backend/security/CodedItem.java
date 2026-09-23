@@ -1,8 +1,7 @@
 package com.vcnity.backend.security;
 
-/**
- * A single AI-coded output item, as produced by the coding stage of the
- * pipeline, attributed to the speaker it came from.
- */
+// PLACEHOLDER — mirrors the shape expected from Sharisha's batch coding job
+// (in progress this sprint). Update field names/types once her real
+// CodedItem/output class lands.
 public record CodedItem(String itemId, String speakerCode) {
 }

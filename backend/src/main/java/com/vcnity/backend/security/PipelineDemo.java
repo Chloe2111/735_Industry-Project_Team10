@@ -71,5 +71,6 @@ public class PipelineDemo {
                 + " to exceptions queue, " + run.rejected().size() + " rejected at tier gate");
         System.out.println("=".repeat(72));
         System.out.println();
+
     }
 }
