@@ -26,3 +26,6 @@ application-local.properties
 
 # Temporary Microsoft Word files
 ~$*
+
+# Node dependencies
+node_modules/
