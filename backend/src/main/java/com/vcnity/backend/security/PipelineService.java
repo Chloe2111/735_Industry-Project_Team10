@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.HashSet;
 
 /**
  * PipelineService.java
@@ -221,6 +222,29 @@ public class PipelineService {
                 }
                 outcomes.add(new PipelineOutcome(
                         itemId, "exceptions_queue", failedChecks.toString(), theme, quote, confidence, deidResult.entityCount()));
+            }
+        }
+
+        // --- Story 20: representational-harm coverage check ---
+        // PLACEHOLDER: uses itemId as a stand-in for speakerCode until real
+        // speaker-level tracking exists (Sharisha's batch coding work, in progress).
+        Set<String> expectedItemIds = new HashSet<>();
+        for (PipelineOutcome o : outcomes) {
+            if (!o.stageReached().equals("rejected_at_gate")) {
+                expectedItemIds.add(o.itemId());
+            }
+        }
+        List<CodedItem> codedItemsApprox = new ArrayList<>();
+        for (PipelineOutcome o : outcomes) {
+            if (!o.stageReached().equals("rejected_at_gate")) {
+                codedItemsApprox.add(new CodedItem(o.itemId(), o.itemId()));
+            }
+        }
+
+        CoverageResult coverage = CoverageCheck.checkCoverage(expectedItemIds, codedItemsApprox);
+        if (!coverage.isComplete()) {
+            for (String missing : coverage.missingSpeakers()) {
+                outcomes.add(new PipelineOutcome(missing, "exceptions_queue", "REPRESENTATION_GAP", null, null, null, 0));
             }
         }
 
