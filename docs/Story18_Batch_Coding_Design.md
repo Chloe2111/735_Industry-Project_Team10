@@ -1,6 +1,7 @@
 # Story 18: Batch Coding and Grounding Design
 
-Status: Proposed interface for implementation and team review.
+Status: Core implementation and local queue integration tested.
+Application intake wiring and team review remain outstanding.
 
 ## 1. Purpose
 
@@ -207,5 +208,66 @@ Run regression tests for existing security and coverage behaviour.
 18.5: Results connected to the actual Story 19 queue, with an
 integration test demonstrating creation and review of flagged items.
 
-Until the Story 19 connection is implemented and tested, report
-Subtask 18.5 as incomplete.
+## 12. Implementation and verification update
+### Implemented
+
+- CodingSource represents an eligible, de-identified source.
+- CodingDraft represents unvalidated coder output.
+- TranscriptCoder defines the replaceable coder interface.
+- CodedFinding stores validated structured findings.
+- BatchCodingJob processes multiple sources and grounds each finding.
+- Grounding uses explicit ASCII whitespace normalisation and
+  locale-independent lowercasing.
+- BatchExceptionsAdapter maps grounding flags to Story 19 flags
+  while preserving the actual sourceRef.
+- BatchCodingWorkflow connects coding, grounding and queue routing.
+
+The workflow returns explicit outcomes for pending verification,
+pending exception review, no findings, coding failure and queue failure.
+
+Queue receipts retain successful entry IDs when a later write fails.
+There is no automatic retry or atomic multi-entry transaction.
+
+### Verification
+
+Command run:
+
+    mvn -f backend/pom.xml clean test
+
+Result:
+
+    Tests run: 79, Failures: 0, Errors: 0, Skipped: 0
+    BUILD SUCCESS
+
+The 79 tests include 34 new Story 18 tests:
+- 9 grounding and structured-finding tests.
+- 11 batch-job tests.
+- 8 queue-adapter tests.
+- 6 workflow tests.
+
+The remaining tests belong to existing backend components.
+
+The workflow tests use synthetic text, a controlled mock coder
+and the actual in-memory Story 19 queue service.
+
+They demonstrate local coding-to-queue processing and review
+through service methods. They do not demonstrate the complete
+user-interface workflow or a live AI-provider connection.
+
+### Remaining work and limitations
+
+- Connect the workflow to the application's approved intake path.
+- Supply the application's shared ExceptionsQueueService instance.
+- Connect and evaluate the agreed coder implementation.
+- Confirm consent and review eligibility upstream before coding.
+- Confirm the case-insensitive quote-comparison rule with the team.
+- Complete validation and edge-case coverage beyond the current tests,
+  including the legacy Map-based grounding interface.
+- Test the combined application path after wiring.
+- Queue entries currently disappear when the application restarts.
+- MongoDB was unavailable during the test run. Database integration
+  was not established by the passing tests.
+- Real client material has not been used for these tests.
+
+Subtask 18.5 remains in progress until the agreed application
+integration and end-to-end acceptance checks are complete.
