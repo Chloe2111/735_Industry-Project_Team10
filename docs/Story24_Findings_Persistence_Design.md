@@ -177,3 +177,43 @@ API tests:
 
 This document is a design proposal, not evidence that the planned
 functionality has already been implemented.
+## 11. Implementation and verification update
+
+This section updates the earlier proposed implementation status.
+
+Implemented:
+- MongoDB finding repository preserving all eight contract fields.
+- Identical-write retries and rejection of conflicting finding IDs.
+- Source-filtered retrieval with pagination.
+- Batch-workflow persistence with separate storage and queue outcomes.
+- Persistence retries using the original findings and IDs.
+- GET endpoints for individual findings and source-filtered findings.
+- Controlled validation, storage-failure, and conflict handling.
+
+Verification:
+- Full backend suite: 104 tests passed, zero failures, errors, or skips.
+- Executed using Java 17 and local MongoDB.
+- Synthetic batch findings were stored in MongoDB and retrieved through
+  the GET controller using MockMvc.
+- Database-failure scenarios were simulated using a mocked repository.
+
+Run the full suite with MongoDB running:
+
+mvn -f backend/pom.xml -Dmongodb.integration=true clean test
+
+Integration limits:
+- The tested workflow uses eligible, de-identified synthetic text and a
+  controlled coder. It does not verify raw-data intake, consent,
+  transcription, de-identification, or a live AI provider.
+- The persistence wrapper is constructed explicitly in the tests.
+  The older PipelineService and the application entry point have not
+  yet been connected to it.
+- ensureIndexes() is called explicitly in integration tests; application
+  setup still needs to invoke it.
+- The findings API is disabled unless findings.api.enabled=true.
+  This switch is not authentication or authorization.
+- Human approval and publication remain separate from persistence.
+- Report grouping and method/analysis/source mapping require team agreement.
+- The exceptions queue remains in memory.
+- The tierViolation queue-mapping issue and Clear/Clear & Republish
+  behaviour are separate unresolved integration work.
