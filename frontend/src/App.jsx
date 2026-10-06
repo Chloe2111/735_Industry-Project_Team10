@@ -8,6 +8,7 @@ import { ReportsReceivedPage } from './pages/ReportsReceivedPage'
 import { ReportDetailPage } from './pages/ReportDetailPage'
 import { MyAccountPage } from './pages/MyAccountPage'
 import { ExceptionsQueuePage } from './pages/ExceptionsQueuePage'
+import { CodingFindingsPage } from './pages/CodingFindingsPage'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
             <Route path="reports-received" element={<ReportsReceivedPage />} />
             <Route path="reports-received/:reportId" element={<ReportDetailPage />} />
             <Route path="exceptions-queue" element={<ExceptionsQueuePage />} />
+            <Route path="coding-findings" element={<CodingFindingsPage />} />
             <Route path="account" element={<MyAccountPage />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>

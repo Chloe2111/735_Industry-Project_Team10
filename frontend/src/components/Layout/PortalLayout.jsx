@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { to: '/my-commissions', label: 'My commissions' },
   { to: '/reports-received', label: 'Reports received' },
   { to: '/exceptions-queue', label: 'Exceptions queue' },
+  { to: '/coding-findings', label: 'Coding findings' },
 ]
 
 const BREADCRUMB_LABELS = [
@@ -16,6 +17,7 @@ const BREADCRUMB_LABELS = [
   { test: (path) => path === '/my-commissions', label: 'My commissions' },
   { test: (path) => path === '/reports-received', label: 'Reports Received' },
   { test: (path) => path === '/exceptions-queue', label: 'Exceptions Queue' },
+  { test: (path) => path === '/coding-findings', label: 'Coding Findings' },
   { test: (path) => path === '/account', label: 'My account' },
   { test: (path) => path.startsWith('/reports-received/'), label: null },
 ]
