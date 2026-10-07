@@ -4,12 +4,12 @@ import { useToast } from '../Toast/ToastProvider'
 import './ExceptionsQueue.css'
 
 const FLAG_HELP = {
-  REPRESENTATION_GAP: 'The coverage check found a missing speaker contribution. Review the source coverage before clearing.',
+  REPRESENTATION_GAP: 'An expected speaker has no coded findings. Review source coverage before clearing.',
   QUOTE_NOT_FOUND: 'Quoted evidence could not be located in the source.',
   LOW_CONFIDENCE: 'AI confidence fell below the review threshold.',
   SOURCE_MISSING: 'No traceable source was available for this finding.',
   CONTESTED: 'The result is contested or needs a human tie-breaker.',
-  TIER_VIOLATION: 'The item breached the data-tier rules and needs a human decision.',
+  TIER_VIOLATION: 'A data-tier restriction needs investigation. Clearing a flag does not override tier restrictions.',
 }
 
 export default function ExceptionsQueue() {
