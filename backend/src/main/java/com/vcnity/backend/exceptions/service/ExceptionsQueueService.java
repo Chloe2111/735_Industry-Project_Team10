@@ -137,6 +137,7 @@ public class ExceptionsQueueService {
         if (reason.contains("sourceMissing")) result.add(FlagType.SOURCE_MISSING);
         if (reason.contains("contradiction")) result.add(FlagType.CONTESTED);
         if (reason.contains("tierViolation")) result.add(FlagType.TIER_VIOLATION);
+        if (reason.contains("REPRESENTATION_GAP")) result.add(FlagType.REPRESENTATION_GAP);
         return result;
     }
 
