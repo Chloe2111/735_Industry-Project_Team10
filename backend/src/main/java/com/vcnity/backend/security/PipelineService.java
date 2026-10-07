@@ -62,7 +62,54 @@ public class PipelineService {
     }
 
     public record PipelineItem(
-            String itemId, Integer tier, String rawText, Map<String, Object> mockProfile) {
+            String itemId,
+            Integer tier,
+            String rawText,
+            Map<String, Object> mockProfile,
+            String speakerCode) {
+
+        public PipelineItem {
+            if (speakerCode != null && speakerCode.isBlank()) {
+                throw new IllegalArgumentException(
+                        "speakerCode must be null or non-blank"
+                );
+            }
+        }
+
+        // Existing callers have no speaker code; preserve that absence.
+        public PipelineItem(
+                String itemId, Integer tier, String rawText,
+                Map<String, Object> mockProfile) {
+            this(itemId, tier, rawText, mockProfile, null);
+        }
+    }
+
+    public enum CoverageStatus {
+        NOT_ASSESSED,
+        PARTIAL,
+        GAPS,
+        COMPLETE
+    }
+
+    /**
+     * Coverage describes speaker inclusion, not grounding or human approval.
+     * Unknown speaker codes prevent a COMPLETE assessment.
+     */
+    public record CoverageSummary(
+            CoverageStatus status,
+            Set<String> missingSpeakers,
+            Set<String> sourcesWithoutSpeakerCodes) {
+
+        public CoverageSummary {
+            missingSpeakers = Set.copyOf(missingSpeakers);
+            sourcesWithoutSpeakerCodes = Set.copyOf(sourcesWithoutSpeakerCodes);
+        }
+
+        static CoverageSummary notAssessed() {
+            return new CoverageSummary(
+                    CoverageStatus.NOT_ASSESSED, Set.of(), Set.of()
+            );
+        }
     }
 
     public record PipelineOutcome(
@@ -80,7 +127,8 @@ public class PipelineService {
             List<PipelineOutcome> clean,
             List<PipelineOutcome> exceptions,
             List<PipelineOutcome> rejected,
-            List<CodedFinding> findings) {
+            List<CodedFinding> findings,
+            CoverageSummary coverage) {
 
         public PipelineRun {
             outcomes = List.copyOf(outcomes);
@@ -88,6 +136,17 @@ public class PipelineService {
             exceptions = List.copyOf(exceptions);
             rejected = List.copyOf(rejected);
             findings = List.copyOf(findings);
+            java.util.Objects.requireNonNull(coverage);
+        }
+
+        public PipelineRun(
+                List<PipelineOutcome> outcomes,
+                List<PipelineOutcome> clean,
+                List<PipelineOutcome> exceptions,
+                List<PipelineOutcome> rejected,
+                List<CodedFinding> findings) {
+            this(outcomes, clean, exceptions, rejected, findings,
+                    CoverageSummary.notAssessed());
         }
 
         // Compatibility for existing callers and test fixtures.
@@ -197,6 +256,8 @@ public class PipelineService {
 
         List<PipelineOutcome> outcomes = new ArrayList<>();
         List<CodedFinding> findings = new ArrayList<>();
+        Map<String, String> eligibleSpeakers = new HashMap<>();
+        Set<String> sourcesWithoutSpeakers = new HashSet<>();
 
         for (PipelineItem item : items) {
             String itemId = item.itemId() != null ? item.itemId() : "<unknown>";
@@ -212,6 +273,13 @@ public class PipelineService {
                 continue;
             }
 
+            // Coverage includes only sources that passed the tier gate.
+            if (item.speakerCode() == null) {
+                sourcesWithoutSpeakers.add(itemId);
+            } else {
+                eligibleSpeakers.put(itemId, item.speakerCode());
+            }
+
             // Stage 2: transcription (stub for text items)
             String rawText = transcribe(item);
 
@@ -221,10 +289,9 @@ public class PipelineService {
             String cleanText = deidResult.redactedText();
 
             // Stages 4 and 5 share Story 18's validation and grounding.
-            // No speaker identifier is available in the legacy input.
-            // Keep it null rather than substituting the item ID.
+            // Carry the actual speaker code, including null when unknown.
             CodingSource source = new CodingSource(
-                    itemId, cleanText, item.tier(), null
+                    itemId, cleanText, item.tier(), item.speakerCode()
             );
 
             TranscriptCoder coder = suppliedCoder != null
@@ -275,26 +342,47 @@ public class PipelineService {
             }
         }
 
-        // --- Story 20: representational-harm coverage check ---
-        // PLACEHOLDER: uses itemId as a stand-in for speakerCode until real
-        // speaker-level tracking exists (Sharisha's batch coding work, in progress).
-        Set<String> expectedItemIds = new HashSet<>();
-        for (PipelineOutcome o : outcomes) {
-            if (!o.stageReached().equals("rejected_at_gate")) {
-                expectedItemIds.add(o.itemId());
-            }
-        }
-        List<CodedItem> codedItemsApprox = new ArrayList<>();
-        for (PipelineOutcome o : outcomes) {
-            if (!o.stageReached().equals("rejected_at_gate")) {
-                codedItemsApprox.add(new CodedItem(o.itemId(), o.itemId()));
-            }
+        // Compare real eligible speaker codes with actual produced findings.
+        Set<String> expectedSpeakers = new HashSet<>(eligibleSpeakers.values());
+        List<CodedItem> codedItems = findings.stream()
+                .map(finding -> new CodedItem(
+                        finding.itemId(), finding.speakerCode()
+                ))
+                .toList();
+
+        CoverageResult coverageResult =
+                CoverageCheck.checkCoverage(expectedSpeakers, codedItems);
+
+        CoverageStatus coverageStatus;
+        if (expectedSpeakers.isEmpty()) {
+            coverageStatus = CoverageStatus.NOT_ASSESSED;
+        } else if (!coverageResult.isComplete()) {
+            coverageStatus = CoverageStatus.GAPS;
+        } else if (!sourcesWithoutSpeakers.isEmpty()) {
+            coverageStatus = CoverageStatus.PARTIAL;
+        } else {
+            coverageStatus = CoverageStatus.COMPLETE;
         }
 
-        CoverageResult coverage = CoverageCheck.checkCoverage(expectedItemIds, codedItemsApprox);
-        if (!coverage.isComplete()) {
-            for (String missing : coverage.missingSpeakers()) {
-                outcomes.add(new PipelineOutcome(missing, "exceptions_queue", "REPRESENTATION_GAP", null, null, null, 0));
+        CoverageSummary coverage = new CoverageSummary(
+                coverageStatus,
+                coverageResult.missingSpeakers(),
+                sourcesWithoutSpeakers
+        );
+
+        // Associate each coverage flag with an actual source, not a speaker ID.
+        Set<String> missingNormalized = coverageResult.missingSpeakers().stream()
+                .map(code -> code.trim().toUpperCase(java.util.Locale.ROOT))
+                .collect(java.util.stream.Collectors.toSet());
+
+        for (var entry : eligibleSpeakers.entrySet()) {
+            String normalized = entry.getValue().trim()
+                    .toUpperCase(java.util.Locale.ROOT);
+            if (missingNormalized.contains(normalized)) {
+                outcomes.add(new PipelineOutcome(
+                        entry.getKey(), "exceptions_queue", "REPRESENTATION_GAP",
+                        null, null, null, 0
+                ));
             }
         }
 
@@ -302,7 +390,7 @@ public class PipelineService {
         List<PipelineOutcome> exceptions = outcomes.stream().filter(o -> o.stageReached().equals("exceptions_queue")).toList();
         List<PipelineOutcome> rejected = outcomes.stream().filter(o -> o.stageReached().equals("rejected_at_gate")).toList();
 
-        return new PipelineRun(outcomes, clean, exceptions, rejected, findings);
+        return new PipelineRun(outcomes, clean, exceptions, rejected, findings, coverage);
     }
 
     // ---------------------------------------------------------------

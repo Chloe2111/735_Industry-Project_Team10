@@ -4,6 +4,8 @@ import { useToast } from '../Toast/ToastProvider'
 import './ExceptionsQueue.css'
 
 const FLAG_HELP = {
+  TIER_VIOLATION: 'A data-tier restriction needs investigation. Clearing a flag does not override tier restrictions.',
+  REPRESENTATION_GAP: 'An expected speaker has no coded findings. Review source coverage before clearing.',
   QUOTE_NOT_FOUND: 'Quoted evidence could not be located in the source.',
   LOW_CONFIDENCE: 'AI confidence fell below the review threshold.',
   SOURCE_MISSING: 'No traceable source was available for this finding.',
