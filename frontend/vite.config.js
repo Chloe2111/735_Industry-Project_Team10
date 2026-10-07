@@ -8,7 +8,7 @@ export default defineConfig({
     proxy: {
       // Dev-time proxy so the browser talks to the Vite origin and avoids CORS.
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:8080',
         changeOrigin: true,
       },
     },
