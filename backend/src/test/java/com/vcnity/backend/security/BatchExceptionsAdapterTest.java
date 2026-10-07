@@ -57,7 +57,7 @@ class BatchExceptionsAdapterTest {
     }
 
     @Test
-    void mapsAllFourSupportedFlags() {
+    void mapsOriginalFourGroundingFlags() {
         ExceptionsQueueService queue = new ExceptionsQueueService();
         BatchExceptionsAdapter adapter =
                 new BatchExceptionsAdapter(queue);
@@ -92,19 +92,16 @@ class BatchExceptionsAdapterTest {
     }
 
     @Test
-    void unsupportedFlagPreventsAllWrites() {
+    void unknownFlagIsRejectedBeforeAnyQueueWrite() {
         ExceptionsQueueService queue = new ExceptionsQueueService();
-        BatchExceptionsAdapter adapter =
-                new BatchExceptionsAdapter(queue);
+        BatchExceptionsAdapter adapter = new BatchExceptionsAdapter(queue);
 
-        BatchExceptionsAdapter.QueueReceipt receipt = adapter.enqueue(
-                finding(List.of("lowConfidence", "tierViolation")),
-                "We need more seating."
-        );
+        assertThrows(IllegalArgumentException.class, () ->
+                adapter.enqueue(
+                        finding(List.of("lowConfidence", "UNKNOWN_TEST_FLAG")),
+                        "We need more seating."
+                ));
 
-        assertFalse(receipt.complete());
-        assertEquals("UNSUPPORTED_QUEUE_FLAG", receipt.errorCode());
-        assertTrue(receipt.exceptionIds().isEmpty());
         assertTrue(queue.list().isEmpty());
     }
 

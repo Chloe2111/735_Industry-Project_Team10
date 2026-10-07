@@ -143,6 +143,7 @@ public final class BatchExceptionsAdapter {
             case "lowConfidence" -> FlagType.LOW_CONFIDENCE;
             case "sourceMissing" -> FlagType.SOURCE_MISSING;
             case "contradiction" -> FlagType.CONTESTED;
+            case "tierViolation" -> FlagType.TIER_VIOLATION;
             default -> null;
         };
     }

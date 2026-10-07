@@ -77,6 +77,7 @@ public class ExceptionsQueueService {
         if (reason.contains("lowConfidence")) result.add(FlagType.LOW_CONFIDENCE);
         if (reason.contains("sourceMissing")) result.add(FlagType.SOURCE_MISSING);
         if (reason.contains("contradiction")) result.add(FlagType.CONTESTED);
+        if (reason.contains("tierViolation")) result.add(FlagType.TIER_VIOLATION);
         return result;
     }
 

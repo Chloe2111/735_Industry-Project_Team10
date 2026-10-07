@@ -20,7 +20,7 @@ class ExceptionsQueueServiceTest {
             assertEquals(type, item.getFlagType());
             assertEquals(ReviewStatus.PENDING, item.getStatus());
         }
-        assertEquals(4, service.listPending().size());
+        assertEquals(FlagType.values().length, service.listPending().size());
     }
 
     @Test void clearAndRejectUpdateHumanReviewStatus() {
@@ -50,5 +50,26 @@ class ExceptionsQueueServiceTest {
         assertEquals(1, imported.size());
         assertEquals(FlagType.QUOTE_NOT_FOUND, imported.get(0).getFlagType());
         assertEquals("WS-006", imported.get(0).getSourceRef());
+    }
+
+    @Test
+    void mapsAndImportsTierViolationForHumanReview() {
+        assertEquals(
+                List.of(FlagType.TIER_VIOLATION),
+                service.mapReason("tierViolation")
+        );
+
+        PipelineService.PipelineOutcome outcome = new PipelineService.PipelineOutcome(
+                "SRC-TIER", "exceptions_queue", "tierViolation",
+                "Community feedback", "Synthetic quotation", 0.8, 0
+        );
+
+        List<ExceptionItem> imported =
+                service.addFromPipelineOutcome(outcome, "Synthetic source context");
+
+        assertEquals(1, imported.size());
+        assertEquals(FlagType.TIER_VIOLATION, imported.get(0).getFlagType());
+        assertEquals(ReviewStatus.PENDING, imported.get(0).getStatus());
+        assertEquals("SRC-TIER", imported.get(0).getSourceRef());
     }
 }
