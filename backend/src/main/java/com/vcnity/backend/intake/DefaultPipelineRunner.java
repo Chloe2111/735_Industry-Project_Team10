@@ -1,6 +1,8 @@
 package com.vcnity.backend.intake;
 
 import com.vcnity.backend.security.Deidentify;
+import com.vcnity.backend.findings.FindingRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.vcnity.backend.security.PipelineService;
 import org.springframework.stereotype.Component;
 
@@ -17,22 +19,27 @@ import java.util.Set;
 public class DefaultPipelineRunner implements PipelineRunner {
 
     private final PipelineService pipeline;
+    private final FindingRepository findings;
     private final Set<String> gazetteer;
     private final Set<String> vernacularTerms;
 
-    public DefaultPipelineRunner() {
+    @Autowired
+    public DefaultPipelineRunner(FindingRepository findings) {
         this(
                 new PipelineService(),
                 Deidentify.loadTermListFromClasspath("communityGazetteer.txt"),
-                Deidentify.loadTermListFromClasspath("vernacularTerms.txt")
+                Deidentify.loadTermListFromClasspath("vernacularTerms.txt"),
+                findings
         );
     }
 
     // Allows tests to supply controlled pipeline results without calling an AI API.
     DefaultPipelineRunner(PipelineService pipeline,
                           Set<String> gazetteer,
-                          Set<String> vernacularTerms) {
+                          Set<String> vernacularTerms,
+                          FindingRepository findings) {
         this.pipeline = Objects.requireNonNull(pipeline);
+        this.findings = Objects.requireNonNull(findings);
         this.gazetteer = Set.copyOf(gazetteer);
         this.vernacularTerms = Set.copyOf(vernacularTerms);
     }
@@ -87,6 +94,7 @@ public class DefaultPipelineRunner implements PipelineRunner {
                 .toList();
 
         if (flagged.isEmpty()) {
+            persistFindings(itemId, result);
             return matching.get(0);
         }
 
@@ -115,9 +123,40 @@ public class DefaultPipelineRunner implements PipelineRunner {
                 .max()
                 .orElse(0);
 
+        persistFindings(itemId, result);
+
         return new PipelineService.PipelineOutcome(
                 itemId, "exceptions_queue", String.join(", ", reasons),
                 evidence.theme(), evidence.quote(), evidence.confidence(), redactions
         );
+    }
+
+    /**
+     * Saves existing findings only; never reruns coding or writes to the queue.
+     * Any failure propagates before intake receives a publishable outcome.
+     */
+    private void persistFindings(
+            String sourceRef, PipelineService.PipelineRun result) {
+        Set<String> ids = new LinkedHashSet<>();
+
+        // Validate the complete list before performing any writes.
+        for (var finding : result.findings()) {
+            if (!Objects.equals(sourceRef, finding.sourceRef())) {
+                throw new IllegalStateException(
+                        "Pipeline returned a finding for another source");
+            }
+            if (!ids.add(finding.itemId())) {
+                throw new IllegalStateException(
+                        "Pipeline returned duplicate finding IDs");
+            }
+        }
+
+        for (var finding : result.findings()) {
+            var saved = findings.save(finding);
+            if (!finding.equals(saved)) {
+                throw new IllegalStateException(
+                        "Finding storage did not confirm the expected record");
+            }
+        }
     }
 }

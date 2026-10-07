@@ -35,7 +35,8 @@ class DefaultPipelineRunnerTest {
                             all.stream().filter(o -> "rejected_at_gate".equals(o.stageReached())).toList()
                     );
                 });
-        return new DefaultPipelineRunner(pipeline, Set.of(), Set.of());
+        return new DefaultPipelineRunner(pipeline, Set.of(), Set.of(),
+                mock(com.vcnity.backend.findings.FindingRepository.class));
     }
 
     private PipelineService.PipelineOutcome outcome(

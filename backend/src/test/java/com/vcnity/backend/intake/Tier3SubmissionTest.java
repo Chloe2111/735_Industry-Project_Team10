@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Sub Task 24.4: a Tier 3 submission is clearly flagged to the submitter
@@ -95,29 +94,69 @@ class Tier3SubmissionTest {
 
     @Test
     void theRealPipelineAlsoRefusesToCodeTier3() throws Exception {
-        DefaultPipelineRunner realPipeline = new DefaultPipelineRunner();
-        assumeTrue(realPipeline.isMockMode(), "skipped when a real API key is set, so tests never call the live model");
+        var repository = org.mockito.Mockito.mock(
+                com.vcnity.backend.findings.FindingRepository.class);
+        var coderCalls = new java.util.concurrent.atomic.AtomicInteger();
 
-        PipelineService.PipelineOutcome outcome = realPipeline.run("T3-CHECK", 3, TEXT);
+        PipelineService service = new PipelineService(sourceText -> {
+            coderCalls.incrementAndGet();
+            return List.of(new com.vcnity.backend.security.CodingDraft(
+                    "Workshop feedback", sourceText, 0.95));
+        });
+
+        DefaultPipelineRunner realPipeline = new DefaultPipelineRunner(
+                service, java.util.Set.of(), java.util.Set.of(), repository);
+
+        PipelineService.PipelineOutcome outcome =
+                realPipeline.run("T3-CHECK", 3, TEXT);
 
         assertEquals("rejected_at_gate", outcome.stageReached());
-        assertNull(outcome.theme(), "no coding result may exist for Tier 3");
+        assertNull(outcome.theme());
         assertNull(outcome.quote());
+        assertEquals(0, coderCalls.get(), "Tier 3 must never reach the coder");
+        org.mockito.Mockito.verifyNoInteractions(repository);
     }
 
     @Test
     void tier1SubmissionStillGoesThroughTheRealPipeline() {
-        DefaultPipelineRunner realPipeline = new DefaultPipelineRunner();
-        assumeTrue(realPipeline.isMockMode(), "skipped when a real API key is set, so tests never call the live model");
+        var repository = org.mockito.Mockito.mock(
+                com.vcnity.backend.findings.FindingRepository.class);
+        org.mockito.Mockito.when(repository.save(org.mockito.ArgumentMatchers.any(
+                com.vcnity.backend.security.CodedFinding.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var coderCalls = new java.util.concurrent.atomic.AtomicInteger();
+        PipelineService service = new PipelineService(sourceText -> {
+            coderCalls.incrementAndGet();
+            return List.of(new com.vcnity.backend.security.CodingDraft(
+                    "Workshop feedback", sourceText, 0.95));
+        });
+
+        DefaultPipelineRunner realPipeline = new DefaultPipelineRunner(
+                service, java.util.Set.of(), java.util.Set.of(), repository);
+
         IntakeService realIntake = new IntakeService(
-                new GroupTierService(new InMemoryGroupTierStore()), new InMemorySubmissionStore(), realPipeline,
+                new GroupTierService(new InMemoryGroupTierStore()),
+                new InMemorySubmissionStore(),
+                realPipeline,
                 new ExceptionsQueueService());
-        realIntake.classifyGroup(new TierRequest("open group", null, 1, "Mohika", "General feedback"));
+
+        realIntake.classifyGroup(new TierRequest(
+                "open group", null, 1, "Mohika", "General feedback"));
 
         SubmissionReceipt receipt = realIntake.submit(
-                new SubmissionRequest(List.of("open group"), "The workshop was well organised. I enjoyed it."));
+                new SubmissionRequest(
+                        List.of("open group"),
+                        "The workshop was well organised. I enjoyed it."));
 
         assertEquals(1, receipt.tier());
-        assertNotEquals(SubmissionStatus.HELD, receipt.status(), "Tier 1 must be processed, not held");
+        assertNotEquals(SubmissionStatus.HELD, receipt.status());
+        assertEquals(1, coderCalls.get(), "Persistence must not rerun coding");
+
+        var saved = org.mockito.ArgumentCaptor.forClass(
+                com.vcnity.backend.security.CodedFinding.class);
+        org.mockito.Mockito.verify(repository).save(saved.capture());
+        assertEquals(receipt.id(), saved.getValue().sourceRef());
+        org.mockito.Mockito.verifyNoMoreInteractions(repository);
     }
 }
