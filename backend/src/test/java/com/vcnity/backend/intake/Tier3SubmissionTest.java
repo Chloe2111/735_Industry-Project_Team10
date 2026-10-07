@@ -19,29 +19,24 @@ class Tier3SubmissionTest {
     private static final String GROUP = "elders circle";
     private static final String TEXT = "This story should not be shared outside the community.";
 
-    private InMemorySubmissionStore submissionStore;
-    private ExceptionsQueueService queue;
-    private RecordingPipeline pipeline;
-    private IntakeService intake;
+    private IntakeFixture app;
 
     @BeforeEach
     void setUp() {
-        submissionStore = new InMemorySubmissionStore();
-        queue = new ExceptionsQueueService();
-        pipeline = new RecordingPipeline();
-        intake = new IntakeService(new GroupTierService(new InMemoryGroupTierStore()), submissionStore, pipeline, queue);
-        intake.classifyGroup(new TierRequest(GROUP, "Elders Circle", 3, "Mohika", "Cultural knowledge is shared here"));
+        app = new IntakeFixture();
+        app.classify(GROUP, 3, "Mohika", "Cultural knowledge is shared here");
     }
 
     private SubmissionReceipt submitTier3() {
-        return intake.submit(new SubmissionRequest(List.of(GROUP), TEXT));
+        return app.submit(TEXT, GROUP);
     }
 
     @Test
     void tier3SubmissionNeverReachesThePipeline() {
         submitTier3();
 
-        assertTrue(pipeline.calls.isEmpty(), "Tier 3 must stop before the tier gate, de-identification or coding run");
+        assertTrue(app.pipeline.calls.isEmpty(), "Tier 3 must stop before the tier gate, de-identification or coding run");
+        assertTrue(app.pipeline.deidentifyCalls.isEmpty(), "Tier 3 text must not be sent to any automated step");
     }
 
     @Test
@@ -50,47 +45,79 @@ class Tier3SubmissionTest {
 
         assertEquals(SubmissionStatus.HELD, receipt.status());
         assertEquals(3, receipt.tier());
-        assertEquals("Culturally restricted", receipt.tierLabel());
         assertTrue(receipt.message().contains("Tier 3"), "the submitter must be told why it was held");
         assertTrue(receipt.message().contains("not processed"));
+        assertTrue(receipt.message().contains("not published"));
+        assertTrue(receipt.message().contains("kept for a person to review"));
     }
 
     @Test
-    void tier3SubmissionIsRecordedButItsTextIsNotStored() {
+    void tier3TextIsKeptForAPersonToReviewAndNothingAutomatedIsRecorded() {
+        // Mohika's decision: the text is kept so a person can review it.
         SubmissionReceipt receipt = submitTier3();
 
-        Submission held = submissionStore.findById(receipt.id()).orElseThrow();
+        Submission held = app.stored(receipt.id());
         assertEquals(SubmissionStatus.HELD, held.getStatus());
         assertEquals(3, held.getTierAtIntake());
-        assertNull(held.getText());
+        assertEquals(TEXT, held.getText(), "kept exactly as submitted: no automated step may change it");
         assertNull(held.getTheme());
         assertNull(held.getQuote());
         assertEquals(List.of(receipt.id()),
-                submissionStore.findByStatus(SubmissionStatus.HELD).stream().map(Submission::getId).toList(),
+                app.submissionStore.findByStatus(SubmissionStatus.HELD).stream().map(Submission::getId).toList(),
                 "held submissions can be listed, so none goes missing silently");
+    }
+
+    @Test
+    void tier3TextIsNotReturnedByAnyEndpoint() throws Exception {
+        SubmissionReceipt receipt = submitTier3();
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .findAndRegisterModules();
+
+        // Everything the API can return about this submission or its group, as JSON.
+        String everythingReturned = mapper.writeValueAsString(receipt)
+                + mapper.writeValueAsString(app.intake.getReceipt(receipt.id()).orElseThrow())
+                + mapper.writeValueAsString(app.intake.listPublished(GROUP))
+                + mapper.writeValueAsString(app.intake.listGroups())
+                + mapper.writeValueAsString(app.queue.list());
+
+        assertFalse(everythingReturned.contains("should not be shared"), "Tier 3 text must stay out of every response");
     }
 
     @Test
     void tier3SubmissionIsNeverPublishedOrQueuedForCodingReview() {
         SubmissionReceipt receipt = submitTier3();
 
-        assertTrue(intake.listPublished(GROUP).isEmpty());
-        assertTrue(queue.list().isEmpty(), "Tier 3 material must not enter the AI exceptions queue either");
-        assertEquals(SubmissionStatus.HELD, intake.getReceipt(receipt.id()).orElseThrow().status());
+        assertTrue(app.intake.listPublished(GROUP).isEmpty());
+        assertTrue(app.queue.list().isEmpty(), "Tier 3 material must not enter the AI exceptions queue either");
+        assertEquals(SubmissionStatus.HELD, app.intake.getReceipt(receipt.id()).orElseThrow().status());
+    }
+
+    @Test
+    void nobodyCanPostAReviewItemForATier3SubmissionToGetItCleared() {
+        SubmissionReceipt receipt = submitTier3();
+        var forged = new com.vcnity.backend.exceptions.model.ExceptionItem(
+                null, com.vcnity.backend.exceptions.model.FlagType.LOW_CONFIDENCE, "q", "c", 0.5, receipt.id());
+        forged.setSourceType(IntakeService.SOURCE_TYPE);
+        forged.setSourceId(receipt.id());
+
+        assertThrows(IllegalArgumentException.class, () -> app.queue.addExternal(forged));
+
+        assertTrue(app.queue.list().isEmpty());
+        assertEquals(SubmissionStatus.HELD, app.stored(receipt.id()).getStatus());
     }
 
     @Test
     void ifThePipelineIsEverReachedItsOwnGateResultIsHeldToo() {
         // Second line of defence: a pipeline answer of "rejected_at_gate" is never treated as publishable.
-        intake.classifyGroup(new TierRequest("group two", null, 2, "Mohika", "Sensitive"));
-        pipeline.returnsStage("rejected_at_gate", "Tier 3 material is community-controlled");
+        app.classify("group two", 2);
+        app.pipeline.returnsStage("rejected_at_gate", "Tier 3 material is community-controlled");
 
-        SubmissionReceipt receipt = intake.submit(new SubmissionRequest(List.of("group two"), TEXT));
+        SubmissionReceipt receipt = app.submit(TEXT, "group two");
 
         assertEquals(SubmissionStatus.HELD, receipt.status());
-        assertNull(submissionStore.findById(receipt.id()).orElseThrow().getText());
-        assertTrue(intake.listPublished("group two").isEmpty());
-        assertTrue(queue.list().isEmpty());
+        assertNull(app.stored(receipt.id()).getText());
+        assertTrue(app.intake.listPublished("group two").isEmpty());
+        assertTrue(app.queue.list().isEmpty());
     }
 
     @Test
@@ -112,7 +139,7 @@ class Tier3SubmissionTest {
         IntakeService realIntake = new IntakeService(
                 new GroupTierService(new InMemoryGroupTierStore()), new InMemorySubmissionStore(), realPipeline,
                 new ExceptionsQueueService());
-        realIntake.classifyGroup(new TierRequest("open group", null, 1, "Mohika", "General feedback"));
+        realIntake.classifyGroup(new TierRequest("open group", null, 1, "Mohika", "General feedback", null));
 
         SubmissionReceipt receipt = realIntake.submit(
                 new SubmissionRequest(List.of("open group"), "The workshop was well organised. I enjoyed it."));

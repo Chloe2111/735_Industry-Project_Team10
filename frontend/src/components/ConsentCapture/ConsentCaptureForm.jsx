@@ -1,24 +1,6 @@
 import { useState } from "react";
+import { TIER_OPTIONS } from "../../constants/tiers";
 import "./ConsentCaptureForm.css";
-
-const TIER_OPTIONS = [
-  {
-    value: 1,
-    label: "General feedback",
-    description: "Nothing personal or identifying in what I shared.",
-  },
-  {
-    value: 2,
-    label: "Personal or sensitive",
-    description: "Includes my name, a personal story, or identifying details.",
-  },
-  {
-    value: 3,
-    label: "Culturally restricted",
-    description:
-      "Includes cultural knowledge, sacred content, or anything that should never leave the community.",
-  },
-];
 
 export default function ConsentCaptureForm({ onSubmit, submitting = false }) {
   const [participantName, setParticipantName] = useState("");

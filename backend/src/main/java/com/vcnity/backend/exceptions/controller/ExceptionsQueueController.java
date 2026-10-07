@@ -9,6 +9,10 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Errors are not handled here: ApiErrorHandler answers them for every controller in the same shape,
+ * { "message": "..." } with 400 for a bad request and 409 for a review that is blocked.
+ */
 @RestController
 @RequestMapping("/api/exceptions")
 public class ExceptionsQueueController {
@@ -26,33 +30,24 @@ public class ExceptionsQueueController {
         return service.get(id).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    /** Open to any caller, so the service ignores the id and review fields and checks any source tag. */
     @PostMapping
-    public ResponseEntity<?> add(@RequestBody ExceptionItem item) {
-        try {
-            ExceptionItem created = service.add(item);
-            return ResponseEntity.created(URI.create("/api/exceptions/" + created.getId())).body(created);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-        }
+    public ResponseEntity<ExceptionItem> add(@RequestBody(required = false) ExceptionItem item) {
+        ExceptionItem created = service.addExternal(item);
+        return ResponseEntity.created(URI.create("/api/exceptions/" + created.getId())).body(created);
     }
 
     @PatchMapping("/{id}/clear")
-    public ResponseEntity<?> clear(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
-        return review(id, body, true);
+    public ResponseEntity<ExceptionItem> clear(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
+        return service.clear(id, noteFrom(body)).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PatchMapping("/{id}/reject")
-    public ResponseEntity<?> reject(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
-        return review(id, body, false);
+    public ResponseEntity<ExceptionItem> reject(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
+        return service.reject(id, noteFrom(body)).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    private ResponseEntity<?> review(String id, Map<String, String> body, boolean clear) {
-        String note = body == null ? "" : body.getOrDefault("note", "");
-        try {
-            var result = clear ? service.clear(id, note) : service.reject(id, note);
-            return result.<ResponseEntity<?>>map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-        }
+    private static String noteFrom(Map<String, String> body) {
+        return body == null ? "" : body.getOrDefault("note", "");
     }
 }

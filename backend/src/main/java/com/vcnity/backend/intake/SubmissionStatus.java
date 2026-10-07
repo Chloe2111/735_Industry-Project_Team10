@@ -4,10 +4,10 @@ package com.vcnity.backend.intake;
 public enum SubmissionStatus {
     /** Passed every automated check, or a reviewer cleared every flag. Visible to the group. */
     PUBLISHED,
-    /** Flagged by the pipeline. Hidden until a person clears every flag in the exceptions queue. */
+    /** Flagged by the pipeline. Hidden while any of its flags is still waiting for a person. */
     PENDING_REVIEW,
-    /** A reviewer rejected a flag. Hidden, but kept so it can be recovered. */
+    /** Every flag has been reviewed and at least one was rejected. Hidden, but kept so it can be recovered. */
     REJECTED,
-    /** Stopped at the tier gate (Tier 3). Never coded, never queued for coding. */
+    /** Tier 3, or halted because its group became Tier 3. Never coded while held, and cannot be cleared. */
     HELD
 }

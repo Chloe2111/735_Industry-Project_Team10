@@ -4,6 +4,9 @@ import { apiClient } from './apiClient'
 // 1) Full mode: Spring Boot API at /api/exceptions.
 // 2) Demo fallback: if the API is unavailable, use the same representative
 //    exception records locally so the reviewer UI remains fully demonstrable.
+//    Development only (npm run dev). A production build never falls back to made-up
+//    records: it shows the real error, so a reviewer cannot "clear" something that was never saved.
+const DEMO_FALLBACK_ALLOWED = import.meta.env?.DEV === true
 const DEMO_ITEMS = [
   { id:'DEMO-1', flagType:'QUOTE_NOT_FOUND', sourceQuote:'The community strongly supports the proposed development.', sourceContext:'The transcript discusses mixed views about the development, but this exact quoted sentence does not appear in the source.', confidence:0.88, sourceRef:'community_transcript_04.txt', status:'PENDING', reviewerNote:'' },
   { id:'DEMO-2', flagType:'LOW_CONFIDENCE', sourceQuote:'Residents may prefer additional green space.', sourceContext:'The model detected a possible preference, but the available evidence is weak and requires human verification.', confidence:0.32, sourceRef:'community_transcript_07.txt', status:'PENDING', reviewerNote:'' },
@@ -23,7 +26,7 @@ async function withDemoFallback(apiCall, fallback) {
   try {
     return await apiCall()
   } catch (err) {
-    if (!isTransportFailure(err)) throw err
+    if (!DEMO_FALLBACK_ALLOWED || !isTransportFailure(err)) throw err
     demoMode = true
     return fallback()
   }

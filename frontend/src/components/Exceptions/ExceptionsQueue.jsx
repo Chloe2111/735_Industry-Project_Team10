@@ -102,6 +102,11 @@ export default function ExceptionsQueue() {
                 Community submission: it stays hidden until every flag on it is cleared. Rejecting keeps it hidden.
               </p>
             )}
+            {selected.blockedReason && (
+              <p className="queue-error" role="alert">
+                This item cannot be cleared: {selected.blockedReason}
+              </p>
+            )}
             <dl className="evidence-grid">
               <div><dt>Flagged quote</dt><dd>{selected.sourceQuote || 'Not available'}</dd></div>
               <div><dt>Confidence</dt><dd>{selected.confidence == null ? 'Not available' : selected.confidence.toFixed(2)}</dd></div>
@@ -111,7 +116,7 @@ export default function ExceptionsQueue() {
               <label className="review-note">Reviewer note<textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional review note" maxLength={500} /><small className="note-hint">Optional to clear. Required to reject.</small></label>
               <div className="review-actions">
                 <button className="btn btn--secondary" disabled={busy || !note.trim()} title={note.trim() ? '' : 'Add a note to reject'} onClick={() => review('reject')}>Reject</button>
-                <button className="btn btn--primary" disabled={busy} onClick={() => review('clear')}>Clear for verification</button>
+                <button className="btn btn--primary" disabled={busy || Boolean(selected.blockedReason)} title={selected.blockedReason ? 'This item cannot be cleared' : ''} onClick={() => review('clear')}>Clear for verification</button>
               </div>
             </>}
             {selected.status !== 'PENDING' && selected.reviewerNote && <p><strong>Reviewer note:</strong> {selected.reviewerNote}</p>}

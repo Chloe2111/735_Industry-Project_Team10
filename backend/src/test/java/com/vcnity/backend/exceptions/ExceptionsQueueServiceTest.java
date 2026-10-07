@@ -3,7 +3,9 @@ package com.vcnity.backend.exceptions;
 import com.vcnity.backend.exceptions.model.ExceptionItem;
 import com.vcnity.backend.exceptions.model.FlagType;
 import com.vcnity.backend.exceptions.model.ReviewStatus;
+import com.vcnity.backend.exceptions.service.ExceptionSourceValidator;
 import com.vcnity.backend.exceptions.service.ExceptionsQueueService;
+import com.vcnity.backend.exceptions.service.ReviewBlockedException;
 import com.vcnity.backend.security.PipelineService;
 import org.junit.jupiter.api.Test;
 
@@ -128,5 +130,126 @@ class ExceptionsQueueServiceTest {
 
         assertEquals(List.of("A1"), service.listBySource("COMMUNITY_SUBMISSION", "SUB-1").stream().map(ExceptionItem::getId).toList());
         assertTrue(service.listBySource(null, "SUB-1").isEmpty());
+    }
+
+    // --- A blocked item is never reported as cleared ---
+
+    @Test void blockedItemCannotBeClearedAndTheReviewerIsToldWhy() {
+        ExceptionItem item = new ExceptionItem("H1", FlagType.LOW_CONFIDENCE, "q", "c", 0.4, "SRC-H1");
+        item.setBlockedReason("Halted: the group is now Tier 3.");
+        service.add(item);
+
+        ReviewBlockedException blocked = assertThrows(ReviewBlockedException.class, () -> service.clear("H1", ""));
+
+        assertEquals(409, blocked.getStatus());
+        assertEquals("Halted: the group is now Tier 3.", blocked.getMessage());
+        assertEquals(ReviewStatus.PENDING, service.get("H1").orElseThrow().getStatus());
+        assertNull(service.get("H1").orElseThrow().getReviewedAt());
+    }
+
+    @Test void blockedItemCanStillBeRejected() {
+        ExceptionItem item = new ExceptionItem("H2", FlagType.LOW_CONFIDENCE, "q", "c", 0.4, "SRC-H2");
+        item.setBlockedReason("Halted: the group is now Tier 3.");
+        service.add(item);
+
+        assertEquals(ReviewStatus.REJECTED, service.reject("H2", "Not needed any more").orElseThrow().getStatus());
+    }
+
+    // --- Items posted through the public API ---
+
+    private ExceptionSourceValidator knownSubmissions(String... ids) {
+        return new ExceptionSourceValidator() {
+            @Override public String sourceType() { return "COMMUNITY_SUBMISSION"; }
+            @Override public void validateSource(String sourceId) {
+                if (!List.of(ids).contains(sourceId)) {
+                    throw new IllegalArgumentException("No submission " + sourceId + " is waiting for review");
+                }
+            }
+        };
+    }
+
+    @Test void addingAnIdThatAlreadyExistsIsRefusedSoAnItemCannotBeOverwritten() {
+        service.add(new ExceptionItem("DUP", FlagType.LOW_CONFIDENCE, "original", "c", 0.4, "SRC-1"));
+        service.clear("DUP", "");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.add(new ExceptionItem("DUP", FlagType.CONTESTED, "replacement", "c", 0.4, "SRC-1")));
+
+        ExceptionItem kept = service.get("DUP").orElseThrow();
+        assertEquals("original", kept.getSourceQuote());
+        assertEquals(ReviewStatus.CLEARED, kept.getStatus());
+    }
+
+    @Test void postedItemCannotChooseItsIdOrPreFillTheReview() {
+        service.add(new ExceptionItem("EXISTING", FlagType.LOW_CONFIDENCE, "original", "c", 0.4, "SRC-1"));
+        ExceptionItem posted = new ExceptionItem("EXISTING", FlagType.CONTESTED, "posted", "c", 0.5, "SRC-2");
+        posted.setStatus(ReviewStatus.CLEARED);
+        posted.setReviewerNote("already checked, trust me");
+        posted.setBlockedReason("fake");
+
+        ExceptionItem created = service.addExternal(posted);
+
+        assertNotEquals("EXISTING", created.getId());
+        assertEquals(ReviewStatus.PENDING, created.getStatus());
+        assertNull(created.getReviewerNote());
+        assertNull(created.getBlockedReason());
+        assertEquals("original", service.get("EXISTING").orElseThrow().getSourceQuote());
+    }
+
+    @Test void postedItemWithASourceTagMustNameARealRecord() {
+        service.addSourceValidator(knownSubmissions("SUB-1"));
+
+        ExceptionItem real = new ExceptionItem(null, FlagType.LOW_CONFIDENCE, "q", "c", 0.4, "SUB-1");
+        real.setSourceType("COMMUNITY_SUBMISSION");
+        real.setSourceId("SUB-1");
+        assertEquals("SUB-1", service.addExternal(real).getSourceId());
+
+        ExceptionItem invented = new ExceptionItem(null, FlagType.LOW_CONFIDENCE, "q", "c", 0.4, "SUB-999");
+        invented.setSourceType("COMMUNITY_SUBMISSION");
+        invented.setSourceId("SUB-999");
+        assertThrows(IllegalArgumentException.class, () -> service.addExternal(invented));
+
+        assertEquals(1, service.list().size());
+    }
+
+    @Test void postedItemWithAnUnknownOrHalfSourceTagIsRefused() {
+        service.addSourceValidator(knownSubmissions("SUB-1"));
+
+        ExceptionItem unknownType = new ExceptionItem(null, FlagType.LOW_CONFIDENCE, "q", "c", 0.4, "X");
+        unknownType.setSourceType("SOMETHING_ELSE");
+        unknownType.setSourceId("X");
+        assertThrows(IllegalArgumentException.class, () -> service.addExternal(unknownType));
+
+        ExceptionItem typeOnly = new ExceptionItem(null, FlagType.LOW_CONFIDENCE, "q", "c", 0.4, "X");
+        typeOnly.setSourceType("COMMUNITY_SUBMISSION");
+        assertThrows(IllegalArgumentException.class, () -> service.addExternal(typeOnly));
+
+        ExceptionItem idOnly = new ExceptionItem(null, FlagType.LOW_CONFIDENCE, "q", "c", 0.4, "X");
+        idOnly.setSourceId("SUB-1");
+        assertThrows(IllegalArgumentException.class, () -> service.addExternal(idOnly));
+
+        assertThrows(IllegalArgumentException.class, () -> service.addExternal(null));
+        assertTrue(service.list().isEmpty());
+    }
+
+    @Test void postedItemWithoutASourceTagIsAcceptedLikeBefore() {
+        ExceptionItem untagged = new ExceptionItem(null, FlagType.QUOTE_NOT_FOUND, "q", "c", 0.9, "transcript_04.txt");
+
+        ExceptionItem created = service.addExternal(untagged);
+
+        assertNotNull(created.getId());
+        assertNull(created.getSourceType());
+        assertEquals(ReviewStatus.PENDING, created.getStatus());
+    }
+
+    @Test void sourceIdsListsEveryRecordOfOneFeatureThatHasItems() {
+        ExceptionItem a = new ExceptionItem(null, FlagType.LOW_CONFIDENCE, "q", "c", 0.4, "SUB-1");
+        a.setSourceType("COMMUNITY_SUBMISSION");
+        a.setSourceId("SUB-1");
+        service.add(a);
+        service.add(new ExceptionItem(null, FlagType.LOW_CONFIDENCE, "q", "c", 0.4, "SUB-2"));
+
+        assertEquals(java.util.Set.of("SUB-1"), service.sourceIds("COMMUNITY_SUBMISSION"));
+        assertTrue(service.sourceIds("OTHER").isEmpty());
     }
 }

@@ -32,4 +32,10 @@ public class DefaultPipelineRunner implements PipelineRunner {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("The pipeline returned no result for " + itemId));
     }
+
+    /** Same call and same term lists as the de-identification step inside PipelineService. */
+    @Override
+    public String deidentify(String text) {
+        return Deidentify.deidentify(text, gazetteer, vernacularTerms).redactedText();
+    }
 }

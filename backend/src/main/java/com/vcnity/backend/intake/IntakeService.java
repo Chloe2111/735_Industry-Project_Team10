@@ -4,11 +4,15 @@ import com.vcnity.backend.exceptions.model.ExceptionItem;
 import com.vcnity.backend.exceptions.model.FlagType;
 import com.vcnity.backend.exceptions.model.ReviewStatus;
 import com.vcnity.backend.exceptions.service.ExceptionReviewListener;
+import com.vcnity.backend.exceptions.service.ExceptionSourceValidator;
 import com.vcnity.backend.exceptions.service.ExceptionsQueueService;
+import com.vcnity.backend.exceptions.service.ReviewBlockedException;
 import com.vcnity.backend.security.PipelineService;
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -16,23 +20,26 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Story 24: connects the community submission form to intake and tiering.
  *
  * Every submission follows the same path:
  *   1. Look up the tier of its group. No tier set -> refused, nothing stored.
- *   2. Tier 3 -> held. The pipeline is not called and the text is not stored.
+ *   2. Tier 3 -> held. The pipeline is not called. The text is kept for a person to review and is
+ *        never returned by any endpoint.
  *   3. Tier 1 or 2 -> run the pipeline (tier gate, de-identification, coding, grounding).
  *        clean   -> published
  *        flagged -> hidden, and sent to the exceptions queue for a person to review
- *   4. When a reviewer clears every flag the submission is published; a reject keeps it hidden.
+ *      Only the de-identified text is stored and published, never the original.
+ *   4. When a reviewer has cleared every flag the submission is published; a reject keeps it hidden.
+ *   5. While a group is Tier 3 nothing of that group is shown or can be published, including what
+ *        was published or rejected before the group became Tier 3.
  *
  * Nothing is ever published without either passing every check or being cleared by a person.
  */
 @Service
-public class IntakeService implements ExceptionReviewListener {
+public class IntakeService implements ExceptionReviewListener, ExceptionSourceValidator {
 
     /** Tag on exceptions-queue items raised here, so this class reacts only to its own items. */
     public static final String SOURCE_TYPE = "COMMUNITY_SUBMISSION";
@@ -40,7 +47,15 @@ public class IntakeService implements ExceptionReviewListener {
     static final int MAX_TEXT_LENGTH = 5000;
     static final int MAX_GROUPS = 10;
 
-    static final String HALTED_PREFIX = "HALTED - group re-tiered to Tier 3. Do not clear without a human re-check. ";
+    static final String HALTED_REASON =
+            "Halted: its group was re-tiered to Tier 3. A person must re-check it; it cannot be cleared for publishing.";
+
+    static final String TIER3_HELD_MESSAGE =
+            "This group is Tier 3, so your feedback was not processed automatically and is not published."
+                    + " It has been kept for a person to review.";
+
+    static final String HIDDEN_BY_TIER3_MESSAGE =
+            "This feedback was published, but its group is now Tier 3, so it is hidden until a person re-checks it.";
 
     private static final System.Logger LOG = System.getLogger(IntakeService.class.getName());
 
@@ -48,7 +63,6 @@ public class IntakeService implements ExceptionReviewListener {
     private final SubmissionStore submissions;
     private final PipelineRunner pipeline;
     private final ExceptionsQueueService queue;
-    private final AtomicBoolean reviewQueueRestored = new AtomicBoolean(false);
 
     public IntakeService(GroupTierService groupTiers, SubmissionStore submissions,
                          PipelineRunner pipeline, ExceptionsQueueService queue) {
@@ -57,6 +71,7 @@ public class IntakeService implements ExceptionReviewListener {
         this.pipeline = pipeline;
         this.queue = queue;
         queue.addReviewListener(this);
+        queue.addSourceValidator(this);
     }
 
     // ------------------------------------------------------------------
@@ -64,7 +79,6 @@ public class IntakeService implements ExceptionReviewListener {
     // ------------------------------------------------------------------
 
     public SubmissionReceipt submit(SubmissionRequest request) {
-        restoreReviewQueueOnce();
         List<String> groupIds = cleanGroupIds(request);
         String text = cleanText(request);
 
@@ -82,32 +96,49 @@ public class IntakeService implements ExceptionReviewListener {
         submission.setSubmittedAt(now);
         submission.setUpdatedAt(now);
 
-        // Tier 3 stops here, before the pipeline is touched in any way.
+        // Tier 3 stops here, before the pipeline is touched in any way: no tier gate, no
+        // de-identification, no coding. The text is kept as submitted so a person can review it.
         if (tier == Tiers.RESTRICTED) {
-            submission.setStatus(SubmissionStatus.HELD);
-            submission.setStatusReason("Tier 3 (culturally restricted): not processed automatically and the text was not stored.");
-            return receipt(submissions.save(submission));
+            return holdAsTier3(submission, text);
         }
 
         PipelineService.PipelineOutcome outcome = runPipeline(submission.getId(), tier, text);
         String stage = outcome.stageReached() == null ? "" : outcome.stageReached();
 
+        // The pipeline can take seconds. If a person moved the group to Tier 3 in the meantime, the
+        // result is thrown away and the submission is held exactly like any other Tier 3 submission.
+        if (!groupTiers.restrictedAmong(groupIds).isEmpty()) {
+            submission.setTierAtIntake(Tiers.RESTRICTED);
+            return holdAsTier3(submission, text);
+        }
+
         switch (stage) {
             case "clean" -> {
-                submission.setText(text);
+                submission.setText(deidentified(text));
                 copyCodingResult(submission, outcome);
                 submission.setStatus(SubmissionStatus.PUBLISHED);
                 submissions.save(submission);
             }
             case "exceptions_queue" -> {
-                submission.setText(text);
+                submission.setText(deidentified(text));
                 copyCodingResult(submission, outcome);
                 submission.setFlags(splitFlags(outcome.reason()));
                 submission.setStatus(SubmissionStatus.PENDING_REVIEW);
                 submission.setStatusReason("Waiting for a person to review: " + outcome.reason());
+                if (reviewFlagTypes(submission).isEmpty()) {
+                    // Never publish and never lose it silently: it stays hidden and says why.
+                    submission.setStatusReason("Flagged (" + outcome.reason()
+                            + ") but no review item could be created. Needs manual review.");
+                }
                 // Saved as hidden first, so a reviewer can never clear an item whose submission is not stored yet.
                 submissions.save(submission);
-                attachReviewItems(submission);
+                boolean expectedItems = !reviewFlagTypes(submission).isEmpty();
+                if (expectedItems && raiseReviewItems(submission).isEmpty()) {
+                    // The queue refused every item. Say so on the record instead of leaving it looking normal.
+                    submission.setStatusReason("Flagged (" + outcome.reason()
+                            + ") but no review item could be created. Needs manual review.");
+                    submissions.save(submission);
+                }
             }
             default -> {
                 // "rejected_at_gate" or anything unexpected: fail closed. Not coded, not published, text not stored.
@@ -118,23 +149,57 @@ public class IntakeService implements ExceptionReviewListener {
                 submissions.save(submission);
             }
         }
-        return receipt(submission);
+        // The tier was re-read after the pipeline and is not Tier 3, so the receipt needs no further lookup.
+        return receipt(submission, false);
+    }
+
+    /** Tier 3: held, text kept as submitted for a person to review, no coding result, no queue item. */
+    private SubmissionReceipt holdAsTier3(Submission submission, String text) {
+        submission.setText(text);
+        submission.setStatus(SubmissionStatus.HELD);
+        submission.setStatusReason(TIER3_HELD_MESSAGE);
+        return receipt(submissions.save(submission), false);
     }
 
     public Optional<SubmissionReceipt> getReceipt(String id) {
-        restoreReviewQueueOnce();
-        return submissions.findById(id).map(this::receipt);
+        return submissions.findById(id).map(s -> receipt(s, isHiddenByCurrentTier(s)));
     }
 
-    /** The published submissions of one group, newest first. Hidden ones are never included. */
+    /**
+     * The published submissions of one group, newest first. Hidden ones are never included.
+     *
+     * A group that is Tier 3 now shows nothing, even what was published before it became Tier 3.
+     * The same goes for a post shared with several groups when any of them is Tier 3 now.
+     * Those posts are hidden, not deleted or changed: if a person moves the group back, they show again.
+     * Two database queries at most, however many posts there are.
+     */
     public List<PublishedSubmission> listPublished(String groupId) {
-        restoreReviewQueueOnce();
         String id = GroupTierService.normaliseGroupId(groupId);
         if (id.isEmpty()) throw new IllegalArgumentException("groupId is required.");
-        return submissions.findByGroupId(id).stream()
-                .filter(s -> s.getStatus() == SubmissionStatus.PUBLISHED)
+
+        List<Submission> published = submissions.findByGroupIdAndStatus(id, SubmissionStatus.PUBLISHED);
+        Set<String> groupsToCheck = new LinkedHashSet<>();
+        groupsToCheck.add(id);
+        for (Submission submission : published) {
+            groupsToCheck.addAll(submission.getGroupIds());
+        }
+        Set<String> restrictedNow = groupTiers.restrictedAmong(groupsToCheck);
+        return published.stream()
+                .filter(s -> !isTier3AtIntake(s))
+                .filter(s -> s.getGroupIds().stream().noneMatch(restrictedNow::contains))
                 .map(s -> new PublishedSubmission(s.getId(), s.getGroupIds(), s.getText(), s.getTierAtIntake(), s.getSubmittedAt()))
                 .toList();
+    }
+
+    /** Tier 3 submissions hold raw text. Whatever their status says, they are never listed or published. */
+    private static boolean isTier3AtIntake(Submission submission) {
+        return submission.getTierAtIntake() != null && submission.getTierAtIntake() == Tiers.RESTRICTED;
+    }
+
+    /** True for a published submission whose group (or one of its groups) is Tier 3 right now. */
+    private boolean isHiddenByCurrentTier(Submission submission) {
+        return submission.getStatus() == SubmissionStatus.PUBLISHED
+                && !groupTiers.restrictedAmong(submission.getGroupIds()).isEmpty();
     }
 
     // ------------------------------------------------------------------
@@ -142,53 +207,49 @@ public class IntakeService implements ExceptionReviewListener {
     // ------------------------------------------------------------------
 
     public List<GroupTier> listGroups() {
-        restoreReviewQueueOnce();
         return groupTiers.list();
     }
 
     /**
      * Sets or changes a group's tier on a person's instruction.
-     * If the group becomes Tier 3, every submission of that group still waiting for review is halted.
+     *
+     * If the group becomes Tier 3, every submission of that group that is waiting for review or was
+     * rejected is halted, so none of them can be cleared and published afterwards. Submissions that
+     * were already published are hidden for as long as the group is Tier 3 (see listPublished).
+     *
+     * @throws ConcurrentTierChangeException if someone else changed the group since the person looked at it
      */
     public ClassificationResult classifyGroup(TierRequest request) {
-        restoreReviewQueueOnce();
         if (request == null) throw new IllegalArgumentException("A group, tier, name and reason are required.");
 
-        Integer previousTier = groupTiers.get(request.groupId()).map(GroupTier::getTier).orElse(null);
-        GroupTier updated = groupTiers.setTier(
-                request.groupId(), request.groupName(), request.tier(), request.setBy(), request.reason());
+        GroupTier updated = groupTiers.setTier(request.groupId(), request.groupName(), request.tier(),
+                request.setBy(), request.reason(), request.expectedVersion());
 
-        List<String> halted = new ArrayList<>();
-        int publishedToRecheck = 0;
-        boolean becameRestricted = updated.getTier() == Tiers.RESTRICTED
-                && (previousTier == null || previousTier != Tiers.RESTRICTED);
-        if (becameRestricted) {
-            for (Submission submission : submissions.findByGroupId(updated.getGroupId())) {
-                if (submission.getStatus() == SubmissionStatus.PENDING_REVIEW) {
-                    halt(submission);
-                    halted.add(submission.getId());
-                } else if (submission.getStatus() == SubmissionStatus.PUBLISHED) {
-                    publishedToRecheck++;
-                }
-            }
+        // Runs whenever the group is Tier 3 after the change, not only when it has just become Tier 3.
+        // Halting twice changes nothing, and it means a halt that failed earlier is repaired by saving again.
+        if (updated.getTier() != Tiers.RESTRICTED) {
+            return new ClassificationResult(updated, List.of(), 0);
         }
-        return new ClassificationResult(updated, halted, publishedToRecheck);
+
+        List<Submission> halted = submissions.haltUnpublishedForGroup(
+                updated.getGroupId(), HALTED_REASON, Instant.now().truncatedTo(ChronoUnit.MILLIS));
+        for (Submission submission : halted) {
+            blockReviewItems(submission.getId());
+        }
+        long published = submissions.countByGroupIdAndStatus(updated.getGroupId(), SubmissionStatus.PUBLISHED);
+        return new ClassificationResult(updated, halted.stream().map(Submission::getId).toList(), (int) published);
     }
 
-    private void halt(Submission submission) {
-        submission.setStatus(SubmissionStatus.HELD);
-        submission.setStatusReason("Halted: its group was re-tiered to Tier 3. A person must re-check it.");
-        submission.setUpdatedAt(Instant.now());
-        submissions.save(submission);
-        for (ExceptionItem item : queue.listBySource(SOURCE_TYPE, submission.getId())) {
-            if (item.getStatus() == ReviewStatus.PENDING && !startsWithHaltedPrefix(item.getSourceContext())) {
-                item.setSourceContext(HALTED_PREFIX + (item.getSourceContext() == null ? "" : item.getSourceContext()));
-            }
+    /**
+     * Marks every queue item of the submission, whatever its review status, so the queue itself
+     * refuses to clear it. A rejected item is marked too: clearing it later would publish the submission.
+     * The quote is removed from the item as well, so the queue no longer shows text of a Tier 3 group.
+     */
+    private void blockReviewItems(String submissionId) {
+        for (ExceptionItem item : queue.listBySource(SOURCE_TYPE, submissionId)) {
+            item.setBlockedReason(HALTED_REASON);
+            item.setSourceQuote(null);
         }
-    }
-
-    private static boolean startsWithHaltedPrefix(String context) {
-        return context != null && context.startsWith(HALTED_PREFIX);
     }
 
     // ------------------------------------------------------------------
@@ -199,6 +260,9 @@ public class IntakeService implements ExceptionReviewListener {
      * Called by the exceptions queue for every item a reviewer clears or rejects.
      * Items that were not raised by a community submission (for example Story 18 coding findings)
      * are ignored, so reviewing them changes nothing here.
+     *
+     * @throws ReviewBlockedException if the submission is held and the reviewer tried to clear the item.
+     *         The queue then leaves the item as it was and the reviewer sees the reason, not a success.
      */
     @Override
     public void beforeReview(ExceptionItem item, ReviewStatus newStatus) {
@@ -213,38 +277,78 @@ public class IntakeService implements ExceptionReviewListener {
         }
         Submission submission = found.get();
         if (submission.getStatus() == SubmissionStatus.HELD) {
-            return; // halted or Tier 3: a review in the queue must never publish it
+            if (newStatus == ReviewStatus.CLEARED) {
+                throw new ReviewBlockedException(submission.getStatusReason() == null
+                        ? HALTED_REASON : submission.getStatusReason());
+            }
+            return; // rejecting the item of a held submission is fine: it stays hidden either way
         }
-        applyReviewStatus(submission, statusFromReviews(submission.getId(), item.getId(), newStatus));
+        SubmissionStatus next = statusFromReviews(submission.getId(), item.getId(), newStatus);
+        if (next == submission.getStatus()) {
+            return;
+        }
+        // Checked against the group's tier as it is now, not as it was at intake: a submission that
+        // was waiting or rejected when its group became Tier 3 must not be published by a later clear,
+        // even if halting it was missed or has not happened yet.
+        if (next == SubmissionStatus.PUBLISHED
+                && (isTier3AtIntake(submission) || !groupTiers.restrictedAmong(submission.getGroupIds()).isEmpty())) {
+            throw new ReviewBlockedException(HALTED_REASON);
+        }
+        // Conditional update: if the submission was halted (or otherwise changed) since it was read above,
+        // nothing is written and the review is stopped, rather than publishing over the newer state.
+        boolean changed = submissions.changeStatus(
+                submission.getId(), submission.getStatus(), next, reasonFor(next, submission), Instant.now());
+        if (!changed) {
+            throw new ReviewBlockedException(
+                    "This submission changed while you were reviewing it. Reload the queue and try again.");
+        }
     }
 
     /**
-     * A submission can have several flags. It is published only when every one is cleared.
-     * Any rejected flag keeps it hidden; clearing that flag later brings it back.
+     * A submission can have several flags, and nothing is decided until a person has looked at all of them:
+     *   any flag still pending   -> still waiting for review (a reject elsewhere does not hide that)
+     *   all reviewed, any reject -> rejected (hidden, but kept; clearing that flag later brings it back)
+     *   all cleared              -> published
      */
     private SubmissionStatus statusFromReviews(String submissionId, String changingItemId, ReviewStatus changingTo) {
         boolean anyPending = false;
         boolean anyRejected = false;
         for (ExceptionItem item : queue.listBySource(SOURCE_TYPE, submissionId)) {
             ReviewStatus status = item.getId().equals(changingItemId) ? changingTo : item.getStatus();
-            if (status == ReviewStatus.REJECTED) anyRejected = true;
             if (status == ReviewStatus.PENDING) anyPending = true;
+            if (status == ReviewStatus.REJECTED) anyRejected = true;
         }
-        if (anyRejected) return SubmissionStatus.REJECTED;
         if (anyPending) return SubmissionStatus.PENDING_REVIEW;
+        if (anyRejected) return SubmissionStatus.REJECTED;
         return SubmissionStatus.PUBLISHED;
     }
 
-    private void applyReviewStatus(Submission submission, SubmissionStatus next) {
-        if (submission.getStatus() == next) return;
-        submission.setStatus(next);
-        submission.setStatusReason(switch (next) {
+    private static String reasonFor(SubmissionStatus status, Submission submission) {
+        return switch (status) {
             case PUBLISHED -> null;
             case REJECTED -> "A reviewer rejected this submission. It is hidden but has not been deleted.";
             default -> "Waiting for a person to review: " + String.join(", ", submission.getFlags());
-        });
-        submission.setUpdatedAt(Instant.now());
-        submissions.save(submission);
+        };
+    }
+
+    /**
+     * Checks a source tag on an item posted through POST /api/exceptions: it must name a submission
+     * that exists and is waiting for review. Anything else is refused, so nobody can post an item
+     * that would later hide a published submission or point at one that was never made.
+     */
+    @Override
+    public String sourceType() {
+        return SOURCE_TYPE;
+    }
+
+    @Override
+    public void validateSource(String sourceId) {
+        boolean waiting = submissions.findById(sourceId)
+                .map(s -> s.getStatus() == SubmissionStatus.PENDING_REVIEW)
+                .orElse(false);
+        if (!waiting) {
+            throw new IllegalArgumentException("No community submission " + sourceId + " is waiting for review.");
+        }
     }
 
     // ------------------------------------------------------------------
@@ -253,30 +357,46 @@ public class IntakeService implements ExceptionReviewListener {
 
     /**
      * The exceptions queue lives in memory, so a restart empties it while submissions waiting for
-     * review are still stored. The first intake call after a restart puts their review items back.
+     * review are still stored. This runs once when the app starts and puts their review items back.
+     *
+     * If the database cannot be reached at that moment the app still starts, and this is logged:
+     * restart the backend once the database is back so the items are restored.
      */
-    private void restoreReviewQueueOnce() {
-        if (reviewQueueRestored.get()) return;
-        synchronized (this) {
-            if (reviewQueueRestored.get()) return;
-            restoreReviewQueue();
-            reviewQueueRestored.set(true);
+    @PostConstruct
+    void restoreReviewQueueAtStartup() {
+        try {
+            int restored = restoreReviewQueue();
+            if (restored > 0) {
+                LOG.log(System.Logger.Level.INFO, "Restored review items for {0} submission(s) waiting for review", restored);
+            }
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "Could not restore the review queue at startup ({0}). Restart once the database is available.",
+                    e.getMessage());
         }
     }
 
-    /** Re-creates review items for stored submissions that are waiting for review but have none. */
+    /**
+     * Re-creates review items for stored submissions that are waiting for review but have none.
+     * One database query, whatever the number of submissions.
+     */
     int restoreReviewQueue() {
+        Set<String> alreadyQueued = queue.sourceIds(SOURCE_TYPE);
         int restored = 0;
         for (Submission submission : submissions.findByStatus(SubmissionStatus.PENDING_REVIEW)) {
-            if (!queue.listBySource(SOURCE_TYPE, submission.getId()).isEmpty()) continue;
-            attachReviewItems(submission);
-            restored++;
+            if (alreadyQueued.contains(submission.getId())) continue;
+            if (!raiseReviewItems(submission).isEmpty()) restored++;
         }
         return restored;
     }
 
-    /** Raises one tagged queue item per flag and records their ids on the submission. */
-    private void attachReviewItems(Submission submission) {
+    /** The queue flag types this submission's pipeline flags map to. */
+    private List<FlagType> reviewFlagTypes(Submission submission) {
+        return queue.mapReason(String.join(", ", submission.getFlags()));
+    }
+
+    /** Raises one tagged queue item per flag. Returns the ids of the items created. */
+    private List<String> raiseReviewItems(Submission submission) {
         String flags = String.join(", ", submission.getFlags());
         String context = "Community submission flagged by automated pipeline checks (" + flags + ")"
                 + (submission.getTheme() == null || submission.getTheme().isBlank()
@@ -288,7 +408,7 @@ public class IntakeService implements ExceptionReviewListener {
         }
 
         List<String> ids = new ArrayList<>();
-        for (FlagType type : queue.mapReason(flags)) {
+        for (FlagType type : reviewFlagTypes(submission)) {
             ExceptionItem item = new ExceptionItem(null, type, submission.getQuote(), context, confidence, submission.getId());
             item.setSourceType(SOURCE_TYPE);
             item.setSourceId(submission.getId());
@@ -299,13 +419,7 @@ public class IntakeService implements ExceptionReviewListener {
                         submission.getId(), e.getMessage());
             }
         }
-        submission.setExceptionIds(ids);
-        if (ids.isEmpty()) {
-            // Never publish and never lose it silently: it stays hidden and says why.
-            submission.setStatusReason("Flagged (" + flags + ") but no review item could be created. Needs manual review.");
-        }
-        submission.setUpdatedAt(Instant.now());
-        submissions.save(submission);
+        return ids;
     }
 
     // ------------------------------------------------------------------
@@ -326,6 +440,20 @@ public class IntakeService implements ExceptionReviewListener {
             throw new PipelineUnavailableException(unavailableMessage(), null);
         }
         return outcome;
+    }
+
+    /** De-identification is part of the automated checks: if it fails, nothing is saved or published. */
+    private String deidentified(String text) {
+        String safe;
+        try {
+            safe = pipeline.deidentify(text);
+        } catch (RuntimeException e) {
+            throw new PipelineUnavailableException(unavailableMessage(), e);
+        }
+        if (safe == null) {
+            throw new PipelineUnavailableException(unavailableMessage(), null);
+        }
+        return safe;
     }
 
     private static String unavailableMessage() {
@@ -368,9 +496,18 @@ public class IntakeService implements ExceptionReviewListener {
         return text;
     }
 
-    private SubmissionReceipt receipt(Submission submission) {
+    /**
+     * @param hiddenByTier true when the submission is stored as published but its group is Tier 3 now.
+     *                     The submitter is then told it is held, not that it is published.
+     */
+    private SubmissionReceipt receipt(Submission submission, boolean hiddenByTier) {
+        if (hiddenByTier) {
+            return new SubmissionReceipt(submission.getId(), SubmissionStatus.HELD, submission.getTierAtIntake(),
+                    submission.getGroupIds(), HIDDEN_BY_TIER3_MESSAGE, submission.getSubmittedAt());
+        }
         String message = switch (submission.getStatus()) {
-            case PUBLISHED -> "Thank you. Your feedback has been published to the group.";
+            case PUBLISHED -> "Thank you. Your feedback has been published to the group."
+                    + " Names and contact details that were detected have been removed.";
             case PENDING_REVIEW -> "Thank you. Your feedback was received and will be checked by a person before it is published.";
             case REJECTED -> "A reviewer decided not to publish this feedback.";
             case HELD -> submission.getStatusReason() == null
@@ -381,7 +518,6 @@ public class IntakeService implements ExceptionReviewListener {
                 submission.getId(),
                 submission.getStatus(),
                 submission.getTierAtIntake(),
-                Tiers.label(submission.getTierAtIntake()),
                 submission.getGroupIds(),
                 message,
                 submission.getSubmittedAt());

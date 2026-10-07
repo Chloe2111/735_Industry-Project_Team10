@@ -3,7 +3,6 @@ package com.vcnity.backend.intake;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.vcnity.backend.exceptions.service.ExceptionsQueueService;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -26,11 +25,6 @@ class IntakePayloadContractTest {
             .findAndRegisterModules()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    private IntakeService newIntake() {
-        return new IntakeService(new GroupTierService(new InMemoryGroupTierStore()), new InMemorySubmissionStore(),
-                new RecordingPipeline(), new ExceptionsQueueService());
-    }
-
     private static List<String> fieldNames(JsonNode node) {
         List<String> names = new ArrayList<>();
         node.fieldNames().forEachRemaining(names::add);
@@ -49,11 +43,11 @@ class IntakePayloadContractTest {
 
     @Test
     void aTierSentByTheClientIsIgnoredSoItCanNeverLowerTheGroupsTier() throws Exception {
-        IntakeService intake = newIntake();
-        intake.classifyGroup(new TierRequest("elders circle", null, 3, "Mohika", "Cultural knowledge"));
+        IntakeFixture app = new IntakeFixture();
+        app.classify("elders circle", 3);
         String tampered = "{\"groupIds\":[\"elders circle\"],\"text\":\"Restricted story.\",\"tier\":1}";
 
-        SubmissionReceipt receipt = intake.submit(mapper.readValue(tampered, SubmissionRequest.class));
+        SubmissionReceipt receipt = app.intake.submit(mapper.readValue(tampered, SubmissionRequest.class));
 
         assertEquals(3, receipt.tier());
         assertEquals(SubmissionStatus.HELD, receipt.status());
@@ -61,41 +55,46 @@ class IntakePayloadContractTest {
 
     @Test
     void receiptHasExactlyTheFieldsTheFormDisplays() throws Exception {
-        IntakeService intake = newIntake();
-        intake.classifyGroup(new TierRequest("youth group a", null, 2, "Mohika", "Personal stories"));
+        IntakeFixture app = new IntakeFixture();
+        app.classify("youth group a", 2);
 
-        JsonNode json = mapper.valueToTree(
-                intake.submit(new SubmissionRequest(List.of("youth group a"), "Great session.")));
+        JsonNode json = mapper.valueToTree(app.submit("Great session.", "youth group a"));
 
-        assertEquals(List.of("groupIds", "id", "message", "status", "submittedAt", "tier", "tierLabel"), fieldNames(json));
+        assertEquals(List.of("groupIds", "id", "message", "status", "submittedAt", "tier"), fieldNames(json));
         assertEquals("PUBLISHED", json.get("status").asText());
         assertEquals(2, json.get("tier").asInt());
-        assertEquals("Personal or sensitive", json.get("tierLabel").asText());
         assertEquals("youth group a", json.get("groupIds").get(0).asText());
     }
 
     @Test
     void tierRequestAndGroupListUseTheFieldNamesTheTierPanelSends() throws Exception {
-        String panelPayload = "{\"groupId\":\"Youth Group A\",\"tier\":2,\"setBy\":\"Mohika\",\"reason\":\"Personal stories\"}";
-        IntakeService intake = newIntake();
+        IntakeFixture app = new IntakeFixture();
+        String firstTime = "{\"groupId\":\"Youth Group A\",\"tier\":2,\"setBy\":\"Mohika\",\"reason\":\"Personal stories\",\"expectedVersion\":null}";
 
-        JsonNode result = mapper.valueToTree(intake.classifyGroup(mapper.readValue(panelPayload, TierRequest.class)));
+        JsonNode result = mapper.valueToTree(app.intake.classifyGroup(mapper.readValue(firstTime, TierRequest.class)));
 
         assertEquals(List.of("group", "haltedSubmissionIds", "publishedToRecheck"), fieldNames(result));
-        JsonNode group = mapper.valueToTree(intake.listGroups()).get(0);
-        assertEquals(List.of("groupId", "groupName", "history", "reason", "setAt", "setBy", "tier"), fieldNames(group));
+        JsonNode group = mapper.valueToTree(app.intake.listGroups()).get(0);
+        assertEquals(List.of("groupId", "groupName", "history", "reason", "setAt", "setBy", "tier", "version"), fieldNames(group));
         assertEquals("youth group a", group.get("groupId").asText());
         assertEquals("Youth Group A", group.get("groupName").asText());
         assertEquals(2, group.get("tier").asInt());
+
+        // The panel sends back the version it was shown; that is what makes the next change safe.
+        String change = "{\"groupId\":\"Youth Group A\",\"tier\":3,\"setBy\":\"Chloee\",\"reason\":\"Restricted\",\"expectedVersion\":"
+                + group.get("version").asLong() + "}";
+        TierRequest parsed = mapper.readValue(change, TierRequest.class);
+        assertEquals(group.get("version").asLong(), parsed.expectedVersion());
+        assertEquals(3, app.intake.classifyGroup(parsed).group().getTier());
     }
 
     @Test
     void publishedSubmissionCarriesTheTextAndTier() throws Exception {
-        IntakeService intake = newIntake();
-        intake.classifyGroup(new TierRequest("youth group a", null, 1, "Mohika", "General"));
-        intake.submit(new SubmissionRequest(List.of("youth group a"), "Great session."));
+        IntakeFixture app = new IntakeFixture();
+        app.classify("youth group a", 1);
+        app.submit("Great session.", "youth group a");
 
-        JsonNode published = mapper.valueToTree(intake.listPublished("youth group a")).get(0);
+        JsonNode published = mapper.valueToTree(app.intake.listPublished("youth group a")).get(0);
 
         assertEquals(List.of("groupIds", "id", "submittedAt", "text", "tier"), fieldNames(published));
         assertEquals("Great session.", published.get("text").asText());

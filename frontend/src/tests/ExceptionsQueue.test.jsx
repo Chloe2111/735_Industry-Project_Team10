@@ -54,4 +54,23 @@ describe('ExceptionsQueue', () => {
     expect(reject).toBeEnabled()
   })
 
+  it('shows why a blocked item cannot be cleared and disables Clear', async () => {
+    exceptionsApi.list.mockResolvedValue([{ ...item, blockedReason: 'Halted: the group is now Tier 3.' }])
+    renderQueue()
+    await screen.findByText('made up quote')
+    expect(screen.getByRole('alert')).toHaveTextContent('Halted: the group is now Tier 3.')
+    expect(screen.getByRole('button', { name: 'Clear for verification' })).toBeDisabled()
+  })
+
+  it('shows the server message, not a success, when a clear is refused', async () => {
+    const user = userEvent.setup()
+    exceptionsApi.list.mockResolvedValue([item])
+    exceptionsApi.clear.mockRejectedValue(new Error('Halted: the group is now Tier 3.'))
+    renderQueue()
+    await screen.findByText('made up quote')
+    await user.click(screen.getByRole('button', { name: 'Clear for verification' }))
+    expect(await screen.findByText('Halted: the group is now Tier 3.')).toBeInTheDocument()
+    expect(screen.queryByText('Exception cleared.')).not.toBeInTheDocument()
+  })
+
 })
