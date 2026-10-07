@@ -37,12 +37,24 @@ import java.util.HashSet;
 public class PipelineService {
 
     private final boolean mockMode;
+    private final TranscriptCoder suppliedCoder;
     private final String apiKey;
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
     public PipelineService() {
+        this.suppliedCoder = null;
         this.apiKey = System.getenv("ANTHROPIC_API_KEY");
         this.mockMode = (apiKey == null || apiKey.isBlank());
+    }
+
+    /**
+     * Supplies a coder explicitly, including deterministic coders for tests.
+     * This constructor does not read an API key or select a fallback coder.
+     */
+    public PipelineService(TranscriptCoder coder) {
+        this.suppliedCoder = java.util.Objects.requireNonNull(coder);
+        this.apiKey = null;
+        this.mockMode = false;
     }
 
     public boolean isMockMode() {
@@ -67,7 +79,25 @@ public class PipelineService {
             List<PipelineOutcome> outcomes,
             List<PipelineOutcome> clean,
             List<PipelineOutcome> exceptions,
-            List<PipelineOutcome> rejected) {
+            List<PipelineOutcome> rejected,
+            List<CodedFinding> findings) {
+
+        public PipelineRun {
+            outcomes = List.copyOf(outcomes);
+            clean = List.copyOf(clean);
+            exceptions = List.copyOf(exceptions);
+            rejected = List.copyOf(rejected);
+            findings = List.copyOf(findings);
+        }
+
+        // Compatibility for existing callers and test fixtures.
+        public PipelineRun(
+                List<PipelineOutcome> outcomes,
+                List<PipelineOutcome> clean,
+                List<PipelineOutcome> exceptions,
+                List<PipelineOutcome> rejected) {
+            this(outcomes, clean, exceptions, rejected, List.of());
+        }
     }
 
     // ---------------------------------------------------------------
@@ -166,6 +196,7 @@ public class PipelineService {
             throws IOException, InterruptedException {
 
         List<PipelineOutcome> outcomes = new ArrayList<>();
+        List<CodedFinding> findings = new ArrayList<>();
 
         for (PipelineItem item : items) {
             String itemId = item.itemId() != null ? item.itemId() : "<unknown>";
@@ -189,39 +220,58 @@ public class PipelineService {
             Deidentify.DeidentificationResult deidResult = Deidentify.deidentify(rawText, gazetteer, vernacularTerms);
             String cleanText = deidResult.redactedText();
 
-            // Stage 4: AI coding (real Claude API or mock)
-            Map<String, Object> coded = codeItem(cleanText, item.mockProfile());
+            // Stages 4 and 5 share Story 18's validation and grounding.
+            // No speaker identifier is available in the legacy input.
+            // Keep it null rather than substituting the item ID.
+            CodingSource source = new CodingSource(
+                    itemId, cleanText, item.tier(), null
+            );
 
-            Map<String, Object> codedItem = new HashMap<>();
-            codedItem.put("itemId", itemId);
-            codedItem.put("sourceRef", itemId);
-            codedItem.put("quote", coded.getOrDefault("quote", ""));
-            codedItem.put("confidence", coded.getOrDefault("confidence", 0.0));
-            codedItem.put("tier", item.tier());
+            TranscriptCoder coder = suppliedCoder != null
+                    ? suppliedCoder
+                    : deidentifiedText -> {
+                        Map<String, Object> coded =
+                                codeItem(deidentifiedText, item.mockProfile());
+                        Object confidence = coded.get("confidence");
+                        return List.of(new CodingDraft(
+                                (String) coded.get("theme"),
+                                (String) coded.get("quote"),
+                                confidence instanceof Number
+                                        ? ((Number) confidence).doubleValue()
+                                        : null
+                        ));
+                    };
 
-            Map<String, String> sourceLookup = new HashMap<>();
-            sourceLookup.put(itemId, cleanText);
+            BatchCodingJob.SourceOutcome sourceOutcome =
+                    new BatchCodingJob(coder)
+                            .run(List.of(source))
+                            .outcomes().get(0);
 
-            // Stage 5: grounding checks
-            Grounding.GroundingResult result = Grounding.ground(codedItem, sourceLookup);
+            findings.addAll(sourceOutcome.findings());
 
-            String theme = (String) coded.get("theme");
-            String quote = (String) coded.get("quote");
-            Double confidence = coded.get("confidence") != null ? ((Number) coded.get("confidence")).doubleValue() : null;
-
-            if (result.isClean()) {
-                outcomes.add(new PipelineOutcome(itemId, "clean", null, theme, quote, confidence, deidResult.entityCount()));
-            } else {
-                Map<String, Boolean> flagMap = result.flags().asMap();
-                StringBuilder failedChecks = new StringBuilder();
-                for (Map.Entry<String, Boolean> entry : flagMap.entrySet()) {
-                    if (Boolean.TRUE.equals(entry.getValue())) {
-                        if (failedChecks.length() > 0) failedChecks.append(", ");
-                        failedChecks.append(entry.getKey());
+            switch (sourceOutcome.status()) {
+                case FAILED -> outcomes.add(new PipelineOutcome(
+                        itemId, "coding_failed", sourceOutcome.errorCode(),
+                        null, null, null, deidResult.entityCount()
+                ));
+                case NO_FINDINGS -> outcomes.add(new PipelineOutcome(
+                        itemId, "no_findings", null,
+                        null, null, null, deidResult.entityCount()
+                ));
+                case CHECKS_PASSED, REQUIRES_REVIEW -> {
+                    for (CodedFinding finding : sourceOutcome.findings()) {
+                        boolean flagged = !finding.flags().isEmpty();
+                        outcomes.add(new PipelineOutcome(
+                                itemId,
+                                flagged ? "exceptions_queue" : "clean",
+                                flagged ? String.join(", ", finding.flags()) : null,
+                                finding.theme(),
+                                finding.quote(),
+                                finding.confidence(),
+                                deidResult.entityCount()
+                        ));
                     }
                 }
-                outcomes.add(new PipelineOutcome(
-                        itemId, "exceptions_queue", failedChecks.toString(), theme, quote, confidence, deidResult.entityCount()));
             }
         }
 
@@ -252,7 +302,7 @@ public class PipelineService {
         List<PipelineOutcome> exceptions = outcomes.stream().filter(o -> o.stageReached().equals("exceptions_queue")).toList();
         List<PipelineOutcome> rejected = outcomes.stream().filter(o -> o.stageReached().equals("rejected_at_gate")).toList();
 
-        return new PipelineRun(outcomes, clean, exceptions, rejected);
+        return new PipelineRun(outcomes, clean, exceptions, rejected, findings);
     }
 
     // ---------------------------------------------------------------
