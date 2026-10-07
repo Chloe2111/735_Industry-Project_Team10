@@ -35,6 +35,6 @@ public final class CoverageCheck {
 
 // Standardises casing/whitespace so 'p1' and 'P1' are treated as the same speaker.    
     private static String normalize(String code) {
-    return code.trim().toUpperCase();
+    return code.trim().toUpperCase(java.util.Locale.ROOT);
 }
 }
