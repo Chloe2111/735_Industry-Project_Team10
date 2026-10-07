@@ -46,6 +46,12 @@ class ExceptionsQueueControllerTest {
                 .andExpect(status().isOk());
     }
 
+    @Test void rejectWithoutNoteReturns400() throws Exception {
+        when(service.reject(eq("EX-1"), anyString())).thenThrow(new IllegalArgumentException("A reviewer note is required to reject an exception"));
+        mvc.perform(patch("/api/exceptions/EX-1/reject").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test void returns404ForUnknownItem() throws Exception {
         when(service.get("missing")).thenReturn(Optional.empty());
         mvc.perform(get("/api/exceptions/missing")).andExpect(status().isNotFound());

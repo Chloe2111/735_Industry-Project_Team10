@@ -8,6 +8,7 @@ const FLAG_HELP = {
   LOW_CONFIDENCE: 'AI confidence fell below the review threshold.',
   SOURCE_MISSING: 'No traceable source was available for this finding.',
   CONTESTED: 'The result is contested or needs a human tie-breaker.',
+  TIER_VIOLATION: 'The item breached the data-tier rules and needs a human decision.',
 }
 
 export default function ExceptionsQueue() {
@@ -96,15 +97,20 @@ export default function ExceptionsQueue() {
               <span className="status-pill">{selected.status}</span>
             </div>
             <p className="flag-help">{FLAG_HELP[selected.flagType]}</p>
+            {selected.sourceType === 'COMMUNITY_SUBMISSION' && (
+              <p className="flag-help">
+                Community submission: it stays hidden until every flag on it is cleared. Rejecting keeps it hidden.
+              </p>
+            )}
             <dl className="evidence-grid">
               <div><dt>Flagged quote</dt><dd>{selected.sourceQuote || 'Not available'}</dd></div>
               <div><dt>Confidence</dt><dd>{selected.confidence == null ? 'Not available' : selected.confidence.toFixed(2)}</dd></div>
               <div className="evidence-wide"><dt>Source context</dt><dd>{selected.sourceContext || 'No source context available.'}</dd></div>
             </dl>
             {selected.status === 'PENDING' && <>
-              <label className="review-note">Reviewer note<textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional review note" maxLength={500} /></label>
+              <label className="review-note">Reviewer note<textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional review note" maxLength={500} /><small className="note-hint">Optional to clear. Required to reject.</small></label>
               <div className="review-actions">
-                <button className="btn btn--secondary" disabled={busy} onClick={() => review('reject')}>Reject</button>
+                <button className="btn btn--secondary" disabled={busy || !note.trim()} title={note.trim() ? '' : 'Add a note to reject'} onClick={() => review('reject')}>Reject</button>
                 <button className="btn btn--primary" disabled={busy} onClick={() => review('clear')}>Clear for verification</button>
               </div>
             </>}

@@ -14,6 +14,15 @@ public class ExceptionItem {
     private LocalDateTime createdAt;
     private LocalDateTime reviewedAt;
 
+    /**
+     * Optional tag saying which feature raised this item, e.g. "COMMUNITY_SUBMISSION".
+     * Null for items that only need the normal clear/reject review (Story 18 coding findings).
+     * Review listeners use this tag to act only on their own items.
+     */
+    private String sourceType;
+    /** Optional id of the record in the feature named by sourceType. */
+    private String sourceId;
+
     public ExceptionItem() {}
 
     public ExceptionItem(String id, FlagType flagType, String sourceQuote, String sourceContext,
@@ -48,4 +57,8 @@ public class ExceptionItem {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getReviewedAt() { return reviewedAt; }
     public void setReviewedAt(LocalDateTime reviewedAt) { this.reviewedAt = reviewedAt; }
+    public String getSourceType() { return sourceType; }
+    public void setSourceType(String sourceType) { this.sourceType = sourceType; }
+    public String getSourceId() { return sourceId; }
+    public void setSourceId(String sourceId) { this.sourceId = sourceId; }
 }

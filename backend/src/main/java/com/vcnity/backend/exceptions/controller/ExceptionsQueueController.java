@@ -37,14 +37,22 @@ public class ExceptionsQueueController {
     }
 
     @PatchMapping("/{id}/clear")
-    public ResponseEntity<ExceptionItem> clear(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
-        String note = body == null ? "" : body.getOrDefault("note", "");
-        return service.clear(id, note).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+    public ResponseEntity<?> clear(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
+        return review(id, body, true);
     }
 
     @PatchMapping("/{id}/reject")
-    public ResponseEntity<ExceptionItem> reject(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
+    public ResponseEntity<?> reject(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
+        return review(id, body, false);
+    }
+
+    private ResponseEntity<?> review(String id, Map<String, String> body, boolean clear) {
         String note = body == null ? "" : body.getOrDefault("note", "");
-        return service.reject(id, note).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+        try {
+            var result = clear ? service.clear(id, note) : service.reject(id, note);
+            return result.<ResponseEntity<?>>map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
 }

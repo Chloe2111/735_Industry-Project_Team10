@@ -43,4 +43,15 @@ describe('ExceptionsQueue', () => {
     await waitFor(() => expect(exceptionsApi.reject).toHaveBeenCalledWith('EX-1', 'Rejected after source review'))
   })
 
+  it('keeps Reject disabled until a note is entered', async () => {
+    const user = userEvent.setup()
+    exceptionsApi.list.mockResolvedValue([item])
+    renderQueue()
+    await screen.findByText('made up quote')
+    const reject = screen.getByRole('button', { name: 'Reject' })
+    expect(reject).toBeDisabled()
+    await user.type(screen.getByPlaceholderText('Optional review note'), 'Not in source')
+    expect(reject).toBeEnabled()
+  })
+
 })
