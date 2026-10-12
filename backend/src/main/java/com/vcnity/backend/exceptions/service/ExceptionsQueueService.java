@@ -12,7 +12,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -22,6 +24,7 @@ public class ExceptionsQueueService {
 
     private final Map<String, ExceptionItem> queue = new ConcurrentHashMap<>();
     private final List<ExceptionReviewListener> reviewListeners = new CopyOnWriteArrayList<>();
+    private final Map<String, ExceptionSourceValidator> sourceValidators = new ConcurrentHashMap<>();
 
     /**
      * Registers a listener that is told about every clear/reject before it is stored.
@@ -32,12 +35,30 @@ public class ExceptionsQueueService {
         reviewListeners.add(listener);
     }
 
+    /** Registers the check for one sourceType on items posted through the public API. */
+    public void addSourceValidator(ExceptionSourceValidator validator) {
+        if (validator == null || validator.sourceType() == null || validator.sourceType().isBlank()) {
+            throw new IllegalArgumentException("validator with a sourceType is required");
+        }
+        sourceValidators.put(validator.sourceType(), validator);
+    }
+
     /** Every item (any status) raised for one record of one feature, e.g. one community submission. */
     public List<ExceptionItem> listBySource(String sourceType, String sourceId) {
         if (sourceType == null || sourceId == null) return List.of();
-        return list().stream()
+        return queue.values().stream()
                 .filter(i -> sourceType.equals(i.getSourceType()) && sourceId.equals(i.getSourceId()))
+                .sorted(Comparator.comparing(ExceptionItem::getCreatedAt).reversed())
                 .toList();
+    }
+
+    /** The ids of every record of one feature that has at least one item in the queue. */
+    public Set<String> sourceIds(String sourceType) {
+        if (sourceType == null) return Set.of();
+        return queue.values().stream()
+                .filter(i -> sourceType.equals(i.getSourceType()) && i.getSourceId() != null)
+                .map(ExceptionItem::getSourceId)
+                .collect(Collectors.toSet());
     }
 
     public List<ExceptionItem> list() {
@@ -54,14 +75,51 @@ public class ExceptionsQueueService {
         return Optional.ofNullable(queue.get(id));
     }
 
+    /** Adds an item from trusted code inside the app. An id that is already in the queue is refused. */
     public ExceptionItem add(ExceptionItem item) {
         validate(item);
         if (item.getId() == null || item.getId().isBlank()) item.setId(UUID.randomUUID().toString());
         item.setStatus(ReviewStatus.PENDING);
         item.setCreatedAt(LocalDateTime.now());
         item.setReviewedAt(null);
-        queue.put(item.getId(), item);
+        if (queue.putIfAbsent(item.getId(), item) != null) {
+            throw new IllegalArgumentException("An exception with id " + item.getId() + " already exists");
+        }
         return item;
+    }
+
+    /**
+     * Adds an item that arrived through POST /api/exceptions, which anyone can call.
+     *
+     * The caller cannot choose the id, pre-fill the review fields, or tag the item as belonging to
+     * a record that does not exist: a source tag is accepted only if the feature it names has
+     * registered a validator and that validator recognises the id.
+     */
+    public ExceptionItem addExternal(ExceptionItem item) {
+        if (item == null) throw new IllegalArgumentException("Exception item is required");
+        item.setId(null);
+        item.setReviewerNote(null);
+        item.setBlockedReason(null);
+
+        String sourceType = blankToNull(item.getSourceType());
+        String sourceId = blankToNull(item.getSourceId());
+        if ((sourceType == null) != (sourceId == null)) {
+            throw new IllegalArgumentException("sourceType and sourceId must be given together");
+        }
+        item.setSourceType(sourceType);
+        item.setSourceId(sourceId);
+        if (sourceType != null) {
+            ExceptionSourceValidator validator = sourceValidators.get(sourceType);
+            if (validator == null) {
+                throw new IllegalArgumentException("Unknown sourceType: " + sourceType);
+            }
+            validator.validateSource(sourceId);
+        }
+        return add(item);
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     public Optional<ExceptionItem> clear(String id, String note) {
@@ -83,6 +141,10 @@ public class ExceptionsQueueService {
         }
         ExceptionItem item = queue.get(id);
         if (item == null) return Optional.empty();
+        // A blocked item is never reported as cleared. The reviewer gets the reason instead.
+        if (status == ReviewStatus.CLEARED && item.getBlockedReason() != null && !item.getBlockedReason().isBlank()) {
+            throw new ReviewBlockedException(item.getBlockedReason());
+        }
         // Listeners run first. If one fails, the item keeps its old status so the reviewer can retry,
         // instead of the queue saying "cleared" while the follow-up action never happened.
         for (ExceptionReviewListener listener : reviewListeners) {

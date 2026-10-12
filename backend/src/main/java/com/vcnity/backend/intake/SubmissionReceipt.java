@@ -8,7 +8,6 @@ public record SubmissionReceipt(
         String id,
         SubmissionStatus status,
         Integer tier,
-        String tierLabel,
         List<String> groupIds,
         String message,
         Instant submittedAt

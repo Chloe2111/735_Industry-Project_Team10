@@ -1,10 +1,13 @@
 import { useState } from 'react'
-import { TIER_LABELS, tierName } from './tiers'
+import { TIER_OPTIONS, tierName } from '../../constants/tiers'
+import { normaliseGroupId } from '../../services/intakeApi'
 
 /**
  * Lets a coordinator set or change a group's tier, and lists the groups classified so far.
  *
  * Only a person sets a tier, so a name and a short reason are required every time.
+ * Each change carries the version of the group that was on screen, so two coordinators
+ * editing the same group cannot overwrite each other without noticing.
  * This panel is separate from the submission form and can be removed from the page
  * without affecting it.
  */
@@ -22,11 +25,15 @@ export default function GroupTierPanel({ groups = [], onSetTier, saving = false 
       return
     }
     setError('')
+    // Send the version of the group as it is shown in the table (null if it is not classified yet).
+    // The backend refuses the change if someone else has changed the group since.
+    const shown = groups.find((g) => g.groupId === normaliseGroupId(group))
     const saved = await onSetTier({
       groupId: group.trim(),
       tier: Number(tier),
       setBy: setBy.trim(),
       reason: reason.trim(),
+      expectedVersion: shown ? shown.version : null,
     })
     if (saved) {
       setGroup('')
@@ -79,9 +86,9 @@ export default function GroupTierPanel({ groups = [], onSetTier, saving = false 
             <label htmlFor="tier-value">Tier</label>
             <select id="tier-value" value={tier} onChange={(e) => setTier(e.target.value)}>
               <option value="">Choose a tier</option>
-              {Object.entries(TIER_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {value} &ndash; {label}
+              {TIER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.value} &ndash; {option.label}
                 </option>
               ))}
             </select>

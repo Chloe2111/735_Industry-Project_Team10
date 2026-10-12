@@ -11,6 +11,11 @@
 
 import { apiClient } from './apiClient'
 
+/** Mirrors the backend rule: group names match regardless of case and extra spaces. */
+export function normaliseGroupId(value) {
+  return (value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
 /**
  * Submits feedback for a group.
  *
@@ -21,7 +26,7 @@ import { apiClient } from './apiClient'
  * from the group's own record.
  *
  * Returns the receipt:
- *   { id, status, tier, tierLabel, groupIds, message, submittedAt }
+ *   { id, status, tier, groupIds, message, submittedAt }
  */
 export function submitFeedback(payload) {
   return apiClient.post('/intake/submissions', payload)
@@ -37,14 +42,18 @@ export function listPublished(groupId) {
   return apiClient.get(`/intake/submissions?groupId=${encodeURIComponent(groupId)}`)
 }
 
-/** Every group that a person has classified, with its tier and history. */
+/** Every group that a person has classified, with its tier, history and version. */
 export function listGroupTiers() {
   return apiClient.get('/intake/group-tiers')
 }
 
 /**
  * Sets or changes a group's tier.
- * body shape (must match TierRequest.java): { groupId, tier, setBy, reason }
+ * body shape (must match TierRequest.java): { groupId, tier, setBy, reason, expectedVersion }
+ *
+ * expectedVersion is the `version` of the group as it was last loaded, or null for a group that
+ * is not classified yet. If someone else changed the group in the meantime the backend answers
+ * 409 and saves nothing, so one coordinator cannot silently overwrite another.
  */
 export function setGroupTier(body) {
   return apiClient.put('/intake/group-tiers', body)

@@ -1,10 +1,10 @@
-import { tierName } from './tiers'
+import { tierName } from '../../constants/tiers'
 
 const STATUS_LABELS = {
   PUBLISHED: 'Published',
   PENDING_REVIEW: 'Waiting for a person to review',
   REJECTED: 'Not published',
-  HELD: 'Held – not processed',
+  HELD: 'Held – not published',
 }
 
 /**

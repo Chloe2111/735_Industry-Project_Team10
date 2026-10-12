@@ -19,7 +19,11 @@ public class Submission {
     @Id
     private String id;
     private List<String> groupIds = new ArrayList<>();
-    /** The submitted text. Null for Tier 3 submissions: restricted text is never stored. */
+    /**
+     * Tier 1 and 2: the de-identified text (names and contact details removed). The original is not stored.
+     * Tier 3: the text exactly as submitted, kept only so a person can review it. It is never sent to
+     * the pipeline and no endpoint returns it.
+     */
     private String text;
     private Integer tierAtIntake;
     private SubmissionStatus status;
@@ -32,8 +36,6 @@ public class Submission {
     private Double confidence;
     private List<String> flags = new ArrayList<>();
 
-    /** Ids of the exceptions-queue items raised for this submission. */
-    private List<String> exceptionIds = new ArrayList<>();
     private Instant submittedAt;
     private Instant updatedAt;
 
@@ -53,7 +55,6 @@ public class Submission {
         c.quote = quote;
         c.confidence = confidence;
         c.flags = new ArrayList<>(flags);
-        c.exceptionIds = new ArrayList<>(exceptionIds);
         c.submittedAt = submittedAt;
         c.updatedAt = updatedAt;
         return c;
@@ -79,8 +80,6 @@ public class Submission {
     public void setConfidence(Double confidence) { this.confidence = confidence; }
     public List<String> getFlags() { return flags; }
     public void setFlags(List<String> flags) { this.flags = flags == null ? new ArrayList<>() : new ArrayList<>(flags); }
-    public List<String> getExceptionIds() { return exceptionIds; }
-    public void setExceptionIds(List<String> exceptionIds) { this.exceptionIds = exceptionIds == null ? new ArrayList<>() : new ArrayList<>(exceptionIds); }
     public Instant getSubmittedAt() { return submittedAt; }
     public void setSubmittedAt(Instant submittedAt) { this.submittedAt = submittedAt; }
     public Instant getUpdatedAt() { return updatedAt; }

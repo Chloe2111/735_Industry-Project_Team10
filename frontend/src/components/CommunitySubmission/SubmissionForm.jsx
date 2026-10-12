@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { normaliseGroupId, tierName } from './tiers'
+import { tierName } from '../../constants/tiers'
+import { normaliseGroupId } from '../../services/intakeApi'
 
 const MAX_TEXT_LENGTH = 5000
 

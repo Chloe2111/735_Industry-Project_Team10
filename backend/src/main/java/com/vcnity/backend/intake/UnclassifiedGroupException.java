@@ -1,19 +1,27 @@
 package com.vcnity.backend.intake;
 
-import java.util.List;
+import com.vcnity.backend.common.ApiException;
 
-/** Thrown when a submission names a group that no person has classified yet. Nothing is stored. */
-public class UnclassifiedGroupException extends RuntimeException {
+import java.util.List;
+import java.util.Map;
+
+/** A submission names a group that no person has classified yet. Nothing is stored. HTTP 422. */
+public class UnclassifiedGroupException extends ApiException {
 
     private final List<String> groupIds;
 
     public UnclassifiedGroupException(List<String> groupIds) {
-        super("No tier has been set for: " + String.join(", ", groupIds)
+        super(422, "No tier has been set for: " + String.join(", ", groupIds)
                 + ". A person must classify the group before anything can be submitted for it.");
         this.groupIds = List.copyOf(groupIds);
     }
 
     public List<String> getGroupIds() {
         return groupIds;
+    }
+
+    @Override
+    public Map<String, Object> details() {
+        return Map.of("unclassifiedGroupIds", groupIds);
     }
 }
