@@ -77,6 +77,12 @@ Two small additions keep them apart:
   A listener is called for every reviewed item, so it must check `sourceType` and ignore the rest.
   It runs before the new status is stored; if it throws, the item stays `PENDING` and the review can be retried.
 
+**Clearing never publishes.** "Clear for verification" only resolves the flag. For items raised by a community
+submission (Story 24), publishing is a separate action: the app can pass the screen a publish action
+(`<ExceptionsQueue communitySubmissions={{ getStatus, publish }} />`), which adds "Clear & publish" and
+"Publish submission" to those items only. Without that prop, as in this story by itself, the screen has no
+publish buttons and behaves exactly as before.
+
 Two more rules protect the shared queue:
 
 - **A blocked item cannot be cleared.** If `ExceptionItem.blockedReason` is set, `clear` returns HTTP 409 with

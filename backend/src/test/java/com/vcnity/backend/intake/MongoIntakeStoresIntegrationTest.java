@@ -164,18 +164,20 @@ class MongoIntakeStoresIntegrationTest {
     }
 
     @Test
-    void haltingAGroupHoldsItsWaitingAndRejectedSubmissionsAndReportsExactlyThose() {
+    void haltingAGroupHoldsEverySubmissionThatIsNotPublishedAndReportsExactlyThose() {
         Instant now = Instant.now();
         Submission waitingA = newSubmission(group, SubmissionStatus.PENDING_REVIEW, now);
         Submission rejected = newSubmission(group, SubmissionStatus.REJECTED, now);
+        Submission cleared = newSubmission(group, SubmissionStatus.CLEARED, now);
         Submission published = newSubmission(group, SubmissionStatus.PUBLISHED, now);
         Submission otherGroupsWaiting = newSubmission(otherGroup, SubmissionStatus.PENDING_REVIEW, now);
 
         List<Submission> halted = submissions.haltUnpublishedForGroup(
                 group, "Halted for the test", Instant.now().truncatedTo(ChronoUnit.MILLIS));
 
-        assertEquals(2, halted.size());
-        assertTrue(halted.stream().map(Submission::getId).toList().containsAll(List.of(waitingA.getId(), rejected.getId())));
+        assertEquals(3, halted.size());
+        assertTrue(halted.stream().map(Submission::getId).toList()
+                .containsAll(List.of(waitingA.getId(), rejected.getId(), cleared.getId())));
         assertEquals(SubmissionStatus.HELD, submissions.findById(waitingA.getId()).orElseThrow().getStatus());
         assertEquals("Halted for the test", submissions.findById(rejected.getId()).orElseThrow().getStatusReason());
         assertEquals(SubmissionStatus.PUBLISHED, submissions.findById(published.getId()).orElseThrow().getStatus());

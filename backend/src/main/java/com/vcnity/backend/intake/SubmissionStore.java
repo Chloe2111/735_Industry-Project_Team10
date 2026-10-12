@@ -27,8 +27,9 @@ public interface SubmissionStore {
     boolean changeStatus(String id, SubmissionStatus from, SubmissionStatus to, String reason, Instant at);
 
     /**
-     * Halts every submission of the group that is not published: the ones waiting for review and the
-     * ones a reviewer rejected (a rejected one could otherwise be cleared and published later).
+     * Halts every submission of the group that is not published: the ones waiting for review, the ones
+     * whose flags were cleared but that nobody has published yet, and the ones a reviewer rejected
+     * (each of those could otherwise be published later).
      * Sets them to HELD with the given reason, in one bulk update. A submission that left those
      * statuses a moment earlier is not touched.
      *

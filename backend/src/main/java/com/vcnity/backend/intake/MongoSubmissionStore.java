@@ -65,7 +65,7 @@ public class MongoSubmissionStore implements SubmissionStore {
 
     /**
      * Two database calls however many submissions there are: one bulk update that only matches
-     * documents still in PENDING_REVIEW or REJECTED, then one read of exactly the documents that
+     * documents still in PENDING_REVIEW, CLEARED or REJECTED, then one read of exactly the documents that
      * update changed (they are the HELD ones of this group carrying this call's timestamp).
      */
     @Override
@@ -76,7 +76,8 @@ public class MongoSubmissionStore implements SubmissionStore {
                 .set("statusReason", reason)
                 .set("updatedAt", when);
         Criteria unpublishedInGroup = Criteria.where("groupIds").is(groupId).and("status")
-                .in(List.of(SubmissionStatus.PENDING_REVIEW.name(), SubmissionStatus.REJECTED.name()));
+                .in(List.of(SubmissionStatus.PENDING_REVIEW.name(), SubmissionStatus.CLEARED.name(),
+                        SubmissionStatus.REJECTED.name()));
         mongo.updateMulti(Query.query(unpublishedInGroup), halt, Submission.class);
 
         Query haltedByThisCall = Query.query(

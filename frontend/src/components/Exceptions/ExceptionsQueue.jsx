@@ -4,7 +4,6 @@ import { useToast } from '../Toast/ToastProvider'
 import './ExceptionsQueue.css'
 
 const FLAG_HELP = {
-  REPRESENTATION_GAP: 'The coverage check found a missing speaker contribution. Review the source coverage before clearing.',
   QUOTE_NOT_FOUND: 'Quoted evidence could not be located in the source.',
   LOW_CONFIDENCE: 'AI confidence fell below the review threshold.',
   SOURCE_MISSING: 'No traceable source was available for this finding.',
@@ -12,7 +11,22 @@ const FLAG_HELP = {
   TIER_VIOLATION: 'The item breached the data-tier rules and needs a human decision.',
 }
 
-export default function ExceptionsQueue() {
+const SUBMISSION_STATUS = {
+  PENDING_REVIEW: 'Waiting for review',
+  CLEARED: 'Cleared – not published yet',
+  PUBLISHED: 'Published',
+  REJECTED: 'Not published (a flag was rejected)',
+  HELD: 'Held',
+}
+
+/**
+ * Clearing a flag and publishing are two separate actions: "Clear" only resolves the flag.
+ *
+ * `communitySubmissions` is optional. When the app passes it ({ getStatus(id), publish(id) }),
+ * items raised by a community submission also get "Clear & publish" and "Publish submission".
+ * Without it this screen works exactly as before and never publishes anything.
+ */
+export default function ExceptionsQueue({ communitySubmissions = null }) {
   const toast = useToast()
   const [items, setItems] = useState([])
   const [selected, setSelected] = useState(null)
@@ -21,6 +35,10 @@ export default function ExceptionsQueue() {
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
   const [pendingOnly, setPendingOnly] = useState(true)
+  const [submissionStatus, setSubmissionStatus] = useState(null)
+
+  const isCommunityItem = selected?.sourceType === 'COMMUNITY_SUBMISSION' && Boolean(selected?.sourceId)
+  const canPublish = Boolean(communitySubmissions) && isCommunityItem
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -38,6 +56,34 @@ export default function ExceptionsQueue() {
 
   useEffect(() => { load() }, [load])
 
+  // For a community submission, show where the submission itself stands (cleared is not published).
+  const selectedId = selected?.id
+  const selectedStatus = selected?.status
+  const selectedSourceId = selected?.sourceId
+  useEffect(() => {
+    let current = true
+    setSubmissionStatus(null)
+    if (canPublish) {
+      communitySubmissions.getStatus(selectedSourceId)
+        .then((receipt) => { if (current) setSubmissionStatus(receipt?.status ?? null) })
+        .catch(() => { if (current) setSubmissionStatus(null) })
+    }
+    return () => { current = false }
+  }, [canPublish, communitySubmissions, selectedId, selectedStatus, selectedSourceId])
+
+  async function showUpdated(updated) {
+    setNote('')
+    if (pendingOnly) {
+      setItems((current) => current.filter((i) => i.id !== updated.id))
+      setSelected(null)
+      await load()
+    } else {
+      setItems((current) => current.map((i) => i.id === updated.id ? updated : i))
+      setSelected(updated)
+    }
+  }
+
+  // "Clear" resolves the flag and nothing else. It never publishes.
   async function review(action) {
     if (!selected) return
     setBusy(true)
@@ -46,17 +92,45 @@ export default function ExceptionsQueue() {
         ? await exceptionsApi.clear(selected.id, note)
         : await exceptionsApi.reject(selected.id, note)
       toast.success(action === 'clear' ? 'Exception cleared.' : 'Exception rejected.')
-      setNote('')
-      if (pendingOnly) {
-        setItems((current) => current.filter((i) => i.id !== updated.id))
-        setSelected(null)
-        await load()
-      } else {
-        setItems((current) => current.map((i) => i.id === updated.id ? updated : i))
-        setSelected(updated)
-      }
+      await showUpdated(updated)
     } catch (err) {
       toast.error(err.message || 'Unable to update exception.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // "Clear & publish" is the explicit second action: clear this flag, then ask to publish the submission.
+  // If it cannot be published yet (another flag is pending, or the group is Tier 3) the flag stays cleared
+  // and the reviewer is told why it was not published.
+  async function clearAndPublish() {
+    if (!selected || !canPublish) return
+    setBusy(true)
+    try {
+      const updated = await exceptionsApi.clear(selected.id, note)
+      try {
+        await communitySubmissions.publish(selected.sourceId)
+        toast.success('Flag cleared and submission published.')
+      } catch (err) {
+        toast.error(`Flag cleared. Not published: ${err.message || 'the submission could not be published.'}`)
+      }
+      await showUpdated(updated)
+    } catch (err) {
+      toast.error(err.message || 'Unable to update exception.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function publishSubmission() {
+    if (!selected || !canPublish) return
+    setBusy(true)
+    try {
+      const receipt = await communitySubmissions.publish(selected.sourceId)
+      setSubmissionStatus(receipt?.status ?? 'PUBLISHED')
+      toast.success('Submission published.')
+    } catch (err) {
+      toast.error(err.message || 'Unable to publish the submission.')
     } finally {
       setBusy(false)
     }
@@ -100,7 +174,9 @@ export default function ExceptionsQueue() {
             <p className="flag-help">{FLAG_HELP[selected.flagType]}</p>
             {selected.sourceType === 'COMMUNITY_SUBMISSION' && (
               <p className="flag-help">
-                Community submission: it stays hidden until every flag on it is cleared. Rejecting keeps it hidden.
+                Community submission: clearing a flag does not publish it. It stays hidden until every flag is
+                cleared and a reviewer publishes it. Rejecting keeps it hidden.
+                {submissionStatus && <><br /><strong>Submission status:</strong> {SUBMISSION_STATUS[submissionStatus] ?? submissionStatus}</>}
               </p>
             )}
             {selected.blockedReason && (
@@ -118,9 +194,17 @@ export default function ExceptionsQueue() {
               <div className="review-actions">
                 <button className="btn btn--secondary" disabled={busy || !note.trim()} title={note.trim() ? '' : 'Add a note to reject'} onClick={() => review('reject')}>Reject</button>
                 <button className="btn btn--primary" disabled={busy || Boolean(selected.blockedReason)} title={selected.blockedReason ? 'This item cannot be cleared' : ''} onClick={() => review('clear')}>Clear for verification</button>
+                {canPublish && (
+                  <button className="btn btn--primary" disabled={busy || Boolean(selected.blockedReason)} title={selected.blockedReason ? 'This item cannot be cleared' : 'Clear this flag and publish the submission'} onClick={clearAndPublish}>Clear &amp; publish</button>
+                )}
               </div>
             </>}
             {selected.status !== 'PENDING' && selected.reviewerNote && <p><strong>Reviewer note:</strong> {selected.reviewerNote}</p>}
+            {canPublish && selected.status === 'CLEARED' && submissionStatus === 'CLEARED' && !selected.blockedReason && (
+              <div className="review-actions">
+                <button className="btn btn--primary" disabled={busy} onClick={publishSubmission}>Publish submission</button>
+              </div>
+            )}
           </>}
         </section>
       </div>

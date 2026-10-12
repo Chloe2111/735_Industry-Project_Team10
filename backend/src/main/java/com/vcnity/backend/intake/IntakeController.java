@@ -18,13 +18,14 @@ import java.util.List;
  *
  *   POST /api/intake/submissions            submit feedback           body: { groupIds: [..], text }
  *   GET  /api/intake/submissions/{id}       check what happened to a submission
+ *   POST /api/intake/submissions/{id}/publish   publish a submission whose flags are all cleared
  *   GET  /api/intake/submissions?groupId=   published submissions of one group
  *   GET  /api/intake/group-tiers            every classified group
  *   PUT  /api/intake/group-tiers            set a group's tier        body: { groupId, groupName?, tier, setBy, reason, expectedVersion }
  *
  * Errors are not handled here: ApiErrorHandler answers them for every controller in the same
  * shape, { "message": "..." }: 400 invalid request, 409 someone else changed the group first,
- * 422 group has no tier, 503 pipeline or database unavailable.
+ * 409 (also) a publish that is not allowed yet, 422 group has no tier, 503 pipeline or database unavailable.
  */
 @RestController
 @RequestMapping("/api/intake")
@@ -45,6 +46,12 @@ public class IntakeController {
     @GetMapping("/submissions/{id}")
     public ResponseEntity<SubmissionReceipt> get(@PathVariable String id) {
         return intake.getReceipt(id).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /** Publishes a submission whose flags have all been cleared. Clearing a flag never does this by itself. */
+    @PostMapping("/submissions/{id}/publish")
+    public ResponseEntity<SubmissionReceipt> publish(@PathVariable String id) {
+        return intake.publish(id).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @GetMapping("/submissions")

@@ -32,7 +32,9 @@ import java.util.UUID;
  *        clean   -> published
  *        flagged -> hidden, and sent to the exceptions queue for a person to review
  *      Only the de-identified text is stored and published, never the original.
- *   4. When a reviewer has cleared every flag the submission is published; a reject keeps it hidden.
+ *   4. Clearing a flag only resolves that flag. When every flag is cleared the submission is "cleared"
+ *        but still hidden; it is published only when a reviewer then publishes it (a separate action).
+ *        A reject keeps it hidden.
  *   5. While a group is Tier 3 nothing of that group is shown or can be published, including what
  *        was published or rejected before the group became Tier 3.
  *
@@ -53,6 +55,9 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
     static final String TIER3_HELD_MESSAGE =
             "This group is Tier 3, so your feedback was not processed automatically and is not published."
                     + " It has been kept for a person to review.";
+
+    static final String CLEARED_REASON =
+            "Every flag was cleared by a reviewer. It stays hidden until a reviewer publishes it.";
 
     static final String HIDDEN_BY_TIER3_MESSAGE =
             "This feedback was published, but its group is now Tier 3, so it is hidden until a person re-checks it.";
@@ -284,13 +289,18 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
             return; // rejecting the item of a held submission is fine: it stays hidden either way
         }
         SubmissionStatus next = statusFromReviews(submission.getId(), item.getId(), newStatus);
+        // Clearing a flag never publishes, and it never un-publishes either: a submission that a
+        // reviewer already published stays published if one of its flags is cleared again.
+        if (submission.getStatus() == SubmissionStatus.PUBLISHED && next == SubmissionStatus.CLEARED) {
+            return;
+        }
         if (next == submission.getStatus()) {
             return;
         }
         // Checked against the group's tier as it is now, not as it was at intake: a submission that
-        // was waiting or rejected when its group became Tier 3 must not be published by a later clear,
-        // even if halting it was missed or has not happened yet.
-        if (next == SubmissionStatus.PUBLISHED
+        // was waiting or rejected when its group became Tier 3 must not be made ready for publishing
+        // by a later clear, even if halting it was missed or has not happened yet.
+        if (next == SubmissionStatus.CLEARED
                 && (isTier3AtIntake(submission) || !groupTiers.restrictedAmong(submission.getGroupIds()).isEmpty())) {
             throw new ReviewBlockedException(HALTED_REASON);
         }
@@ -305,10 +315,67 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
     }
 
     /**
+     * Publishes a submission whose flags have all been cleared. This is the only way a flagged
+     * submission is ever published: clearing a flag does not do it.
+     *
+     * Publishing an already published submission changes nothing and is not an error.
+     *
+     * @return empty if there is no such submission
+     * @throws PublishRefusedException if a flag is still pending or was rejected, the submission is
+     *         held, or its group is Tier 3 now. Nothing is changed.
+     */
+    public Optional<SubmissionReceipt> publish(String submissionId) {
+        Optional<Submission> found = submissions.findById(submissionId);
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        Submission submission = found.get();
+        if (submission.getStatus() == SubmissionStatus.PUBLISHED) {
+            return Optional.of(receipt(submission, isHiddenByCurrentTier(submission)));
+        }
+        if (isTier3AtIntake(submission) || !groupTiers.restrictedAmong(submission.getGroupIds()).isEmpty()) {
+            throw new PublishRefusedException(HALTED_REASON);
+        }
+        if (submission.getStatus() != SubmissionStatus.CLEARED) {
+            throw new PublishRefusedException(whyNotPublishable(submission));
+        }
+        // The queue is checked as well as the stored status, in case a flag changed a moment ago.
+        if (statusFromReviews(submission.getId(), null, null) != SubmissionStatus.CLEARED) {
+            throw new PublishRefusedException(
+                    "A flag on this submission is no longer cleared. Reload the queue and review it again.");
+        }
+        // Conditional update: it applies only while the submission is still cleared, so a halt or a
+        // reject that happens at the same moment wins and nothing is published over it.
+        boolean changed = submissions.changeStatus(
+                submission.getId(), SubmissionStatus.CLEARED, SubmissionStatus.PUBLISHED, null, Instant.now());
+        if (!changed) {
+            throw new PublishRefusedException(
+                    "This submission changed while you were publishing it. Reload the queue and try again.");
+        }
+        return submissions.findById(submission.getId()).map(s -> receipt(s, false));
+    }
+
+    private String whyNotPublishable(Submission submission) {
+        return switch (submission.getStatus()) {
+            case PENDING_REVIEW -> {
+                long pending = queue.listBySource(SOURCE_TYPE, submission.getId()).stream()
+                        .filter(item -> item.getStatus() == ReviewStatus.PENDING).count();
+                yield (pending == 1 ? "1 flag" : pending + " flags") + " on this submission still "
+                        + (pending == 1 ? "needs" : "need") + " review. It can be published once every flag is cleared.";
+            }
+            case REJECTED -> "A reviewer rejected a flag on this submission, so it cannot be published.";
+            case HELD -> submission.getStatusReason() == null ? HALTED_REASON : submission.getStatusReason();
+            default -> "This submission cannot be published.";
+        };
+    }
+
+    /**
      * A submission can have several flags, and nothing is decided until a person has looked at all of them:
      *   any flag still pending   -> still waiting for review (a reject elsewhere does not hide that)
-     *   all reviewed, any reject -> rejected (hidden, but kept; clearing that flag later brings it back)
-     *   all cleared              -> published
+     *   all reviewed, any reject -> rejected (hidden, but kept; clearing that flag later makes it publishable again)
+     *   all cleared              -> cleared: ready for a reviewer to publish, but NOT published
+     *
+     * This never returns PUBLISHED. Only {@link #publish} publishes.
      */
     private SubmissionStatus statusFromReviews(String submissionId, String changingItemId, ReviewStatus changingTo) {
         boolean anyPending = false;
@@ -320,12 +387,13 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
         }
         if (anyPending) return SubmissionStatus.PENDING_REVIEW;
         if (anyRejected) return SubmissionStatus.REJECTED;
-        return SubmissionStatus.PUBLISHED;
+        return SubmissionStatus.CLEARED;
     }
 
     private static String reasonFor(SubmissionStatus status, Submission submission) {
         return switch (status) {
             case PUBLISHED -> null;
+            case CLEARED -> CLEARED_REASON;
             case REJECTED -> "A reviewer rejected this submission. It is hidden but has not been deleted.";
             default -> "Waiting for a person to review: " + String.join(", ", submission.getFlags());
         };
@@ -377,8 +445,8 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
     }
 
     /**
-     * Re-creates review items for stored submissions that are waiting for review but have none.
-     * One database query, whatever the number of submissions.
+     * Re-creates review items for stored submissions that are waiting for review, or cleared but
+     * not yet published, and have none. Two database queries, whatever the number of submissions.
      */
     int restoreReviewQueue() {
         Set<String> alreadyQueued = queue.sourceIds(SOURCE_TYPE);
@@ -386,6 +454,19 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
         for (Submission submission : submissions.findByStatus(SubmissionStatus.PENDING_REVIEW)) {
             if (alreadyQueued.contains(submission.getId())) continue;
             if (!raiseReviewItems(submission).isEmpty()) restored++;
+        }
+        // Cleared but not yet published: put the items back as cleared, so a reviewer still has
+        // something to open and publish from. They must not come back as pending.
+        for (Submission submission : submissions.findByStatus(SubmissionStatus.CLEARED)) {
+            if (alreadyQueued.contains(submission.getId())) continue;
+            List<String> ids = raiseReviewItems(submission);
+            for (ExceptionItem item : queue.listBySource(SOURCE_TYPE, submission.getId())) {
+                if (!ids.contains(item.getId())) continue;
+                item.setStatus(ReviewStatus.CLEARED);
+                item.setReviewerNote("Cleared before the last restart.");
+                item.setReviewedAt(java.time.LocalDateTime.now());
+            }
+            if (!ids.isEmpty()) restored++;
         }
         return restored;
     }
@@ -401,7 +482,7 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
         String context = "Community submission flagged by automated pipeline checks (" + flags + ")"
                 + (submission.getTheme() == null || submission.getTheme().isBlank()
                         ? "" : " for coded theme \"" + submission.getTheme() + "\"")
-                + ". It stays hidden until every flag is cleared. Verify against the de-identified source before clearing.";
+                + ". Clearing a flag does not publish it. Verify against the de-identified source before clearing.";
         Double confidence = submission.getConfidence();
         if (confidence != null && (confidence.isNaN() || confidence < 0 || confidence > 1)) {
             confidence = null; // the queue only accepts 0..1
@@ -509,6 +590,7 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
             case PUBLISHED -> "Thank you. Your feedback has been published to the group."
                     + " Names and contact details that were detected have been removed.";
             case PENDING_REVIEW -> "Thank you. Your feedback was received and will be checked by a person before it is published.";
+            case CLEARED -> "A reviewer has checked your feedback. It will appear once a reviewer publishes it.";
             case REJECTED -> "A reviewer decided not to publish this feedback.";
             case HELD -> submission.getStatusReason() == null
                     ? "This feedback was held and was not processed automatically."

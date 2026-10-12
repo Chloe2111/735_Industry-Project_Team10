@@ -14,22 +14,42 @@ One minimal form (group + feedback). Every submission goes through intake before
 | No tier set | Refused. Nothing is stored and the pipeline is not called. | A message that the group must be classified first (HTTP 422) |
 | Tier 3 | Held. The pipeline is not called. The text is kept, as submitted, for a person to review. No endpoint returns it. | "Handled as Tier 3", status Held |
 | Tier 1 or 2, checks pass | Published, with detected names and contact details removed | "Handled as Tier N", status Published |
-| Tier 1 or 2, flagged | Hidden and sent to the exceptions queue (Story 19) | "Handled as Tier N", status Waiting for a person to review |
+| Tier 1 or 2, flagged | Hidden and sent to the exceptions queue (Story 19). Published only when every flag is cleared **and** a reviewer then publishes it | "Handled as Tier N", status Waiting for a person to review |
 
 Only the de-identified text of a Tier 1 or 2 submission is stored and published. The original is not stored.
 De-identification is rule-based and does not catch everything (see "Known limitations").
 
-How a flagged submission is decided:
+## Clear and publish are two separate actions
 
-- While any of its flags is still pending, it stays "waiting for review", even if another flag was already rejected.
-- When every flag has been reviewed: all cleared means published; any rejected means not published.
-- A rejected submission is hidden, not deleted. Clearing the rejected item later publishes it.
+Clearing a flag never publishes anything. Resolving a flag and authorising publication are different decisions:
+
+| Action | Where | What it does |
+|---|---|---|
+| **Clear** | `PATCH /api/exceptions/{id}/clear`, button "Clear for verification" | Resolves that flag only |
+| **Publish** | `POST /api/intake/submissions/{id}/publish`, button "Publish submission" | Publishes a submission whose flags are all cleared |
+| **Clear & publish** | Button "Clear & publish" (the team's "Clear & Republish") | Does the two calls above, one after the other |
+
+How a flagged submission moves:
+
+- While any of its flags is still pending, it stays `PENDING_REVIEW`, even if another flag was already rejected.
+- When every flag has been reviewed and any was rejected, it is `REJECTED` (hidden, not deleted).
+- When every flag is cleared, it is `CLEARED`: still hidden. It becomes `PUBLISHED` only through the publish action.
+- Clearing a rejected flag later makes the submission `CLEARED` again, not published.
+- Publish is refused with 409 and a reason while a flag is pending ("1 flag on this submission still needs
+  review"), after a reject, for a held submission, or when the group is Tier 3. Nothing changes.
+- "Clear & publish" with another flag still pending clears the flag and tells the reviewer why it was not published.
+- Clearing a flag again on a published submission does not un-publish it. Rejecting a flag does hide it again.
+- Publishing an already published submission changes nothing.
+
+The review screen gets the publish action from the app (`<ExceptionsQueue communitySubmissions={...} />` in
+`App.jsx`). Without it the screen has no publish buttons, so Story 19 by itself never publishes anything.
 
 ## When a group becomes Tier 3
 
 Nothing of a Tier 3 group is shown or can be published, whatever tier it was submitted under:
 
-- Submissions waiting for review, and submissions a reviewer rejected, are halted (`HELD`). Their queue
+- Submissions waiting for review, submissions that were cleared but not yet published, and submissions a
+  reviewer rejected, are halted (`HELD`). Their queue
   items are blocked, so none of them can be cleared and published afterwards, and the quote is removed
   from those items so the queue stops showing the group's text.
 - Posts that were already published are hidden for as long as the group is Tier 3. `GET /submissions`
@@ -56,6 +76,7 @@ The person who makes the change is told how many submissions were halted and how
 | Miah | A rejected post can be published after its group moves to Tier 3 | "When a group becomes Tier 3" above. `IntakeServiceTest`: `rejectedSubmissionIsHaltedWhenItsGroupBecomesTier3AndCanNoLongerBeCleared` and the three tests after it |
 | Miah | Published posts stay visible after the group becomes Tier 3 | Same section. Tests: `publishedPostsAreHiddenWhileTheirGroupIsTier3` and the two after it |
 | Miah | Published posts keep names and contact details | De-identified text only. Tests: `namesAndContactDetailsAreRemovedBeforeAnythingIsStoredOrPublished` and the two after it |
+| Chloee, Sharisha | "Clear" and "Clear & Republish" must be separate, so clearing a flag never publishes | "Clear and publish are two separate actions" above. `IntakeServiceTest`: `clearingTheFlagDoesNotPublishTheSubmission` and the nine tests after it |
 | Mohika | Tier 3: keep the text for a person to review | `Tier3SubmissionTest`: `tier3TextIsKeptForAPersonToReviewAndNothingAutomatedIsRecorded`, `tier3TextIsNotReturnedByAnyEndpoint` |
 
 ## Subtasks
@@ -75,11 +96,12 @@ All under `/api/intake`.
 |---|---|---|
 | `POST /submissions` | `{ "groupIds": ["Youth Group A"], "text": "..." }` | 201 receipt: `{ id, status, tier, groupIds, message, submittedAt }` |
 | `GET /submissions/{id}` | – | The latest receipt, or 404. A receipt never contains the submitted text |
+| `POST /submissions/{id}/publish` | – | 200 with the receipt (status `PUBLISHED`), 404 if unknown, 409 with a reason if it cannot be published yet |
 | `GET /submissions?groupId=...` | – | Published submissions of that group: `[{ id, groupIds, text, tier, submittedAt }]`. `text` is de-identified. Empty while the group is Tier 3 |
 | `GET /group-tiers` | – | Every classified group: `{ groupId, groupName, tier, setBy, reason, setAt, history, version }` |
 | `PUT /group-tiers` | `{ "groupId": "Youth Group A", "tier": 2, "setBy": "Mohika", "reason": "...", "expectedVersion": 0 }` | `{ group, haltedSubmissionIds, publishedToRecheck }` |
 
-`status` is one of `PUBLISHED`, `PENDING_REVIEW`, `REJECTED`, `HELD`.
+`status` is one of `PUBLISHED`, `PENDING_REVIEW`, `CLEARED`, `REJECTED`, `HELD`.
 The submission body has no tier field on purpose. A `tier` sent by a client is ignored.
 
 ### Errors
@@ -90,7 +112,7 @@ always as `{ "message": "..." }`:
 | Status | When |
 |---|---|
 | 400 | The request is invalid (missing group, empty text, reject without a note, bad source tag) |
-| 409 | A tier change was made from a stale view, or a reviewer tried to clear a halted item |
+| 409 | A tier change was made from a stale view, a reviewer tried to clear a halted item, or a publish is not allowed yet |
 | 422 | The group has no tier (body also lists `unclassifiedGroupIds`) |
 | 503 | The pipeline or the database is unavailable. Nothing was saved |
 
@@ -180,12 +202,13 @@ To run the MongoDB stores against a real local MongoDB (skipped otherwise):
 
 Checked while building this (without Maven or npm, which were not available in that environment):
 
-- 134 backend logic tests pass through a stand-in test runner: 78 for intake, 19 for the queue,
+- 145 backend logic tests pass through a stand-in test runner: 89 for intake, 19 for the queue,
   4 for the error handler, 33 existing pipeline tests.
 - Each new rule was broken on purpose once to confirm a test fails when it is broken.
-- The whole flow was run in a real browser against the real service and controller code (64 checks),
+- The whole flow was run in a real browser against the real service and controller code (74 checks),
   including a stale tier change, a clear on a halted item, invented queue items, a rejected post in a
-  group that becomes Tier 3, hidden posts, and removed names and phone numbers.
+  group that becomes Tier 3, hidden posts, removed names and phone numbers, and Clear, Publish and
+  Clear & publish as separate actions.
 
 Not yet run, and must be run before merging:
 
@@ -201,10 +224,12 @@ Not yet run, and must be run before merging:
   these screens. The backend deals in tier numbers only.
 - Database calls do not grow with the number of records: tiers for several groups are one query, halting a
   group's submissions is one bulk update plus one read, listing a group's published posts is two queries,
-  and restoring the queue is one query.
+  and restoring the queue is two queries.
 - De-identification uses the pipeline's own `Deidentify` class and term lists, so the stored text is exactly
   what the coder saw. Removed parts are stored as `[REDACTED:...]` tags and shown on the page as "[removed]".
 - Tier 3 text is not de-identified: that would be an automated step, and Tier 3 stops before all of them.
+- After a restart, a submission that was cleared but not published gets its queue items back as already
+  cleared (not pending), so a reviewer can still open one and publish it.
 - The exceptions queue is in memory (Story 19), so `IntakeService` puts the review items of waiting
   submissions back once at startup (`@PostConstruct`). If the database cannot be reached at that moment the app
   still starts and logs a warning; restart it once the database is back.
@@ -232,6 +257,7 @@ Not yet run, and must be run before merging:
   with its mock coder; it cannot yet read a real API reply.
 - The reviewer sees the flagged quote and coded theme, not the full de-identified text, because
   `PipelineService` does not return it.
+- Publishing does not record who published, because there are no logins yet (see "Known gap").
 - Consent is not checked at submission.
 - Not connected to the Story 17 community workspace; groups are identified by the name typed in the form.
 - A group moved to Tier 3 and later moved back: its held submissions stay held (its hidden published posts

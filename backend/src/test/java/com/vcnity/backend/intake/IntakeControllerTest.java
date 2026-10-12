@@ -121,4 +121,25 @@ class IntakeControllerTest {
         assertThrows(IllegalArgumentException.class, () -> controller.classify(null));
         assertTrue(controller.listGroups().isEmpty());
     }
+
+    @Test
+    void publishReturns200ForAClearedSubmission404ForUnknownAnd409WhenNotAllowedYet() {
+        app.classify("youth group a", 1);
+        app.pipeline.returnsFlagged("lowConfidence");
+        String id = controller.submit(new SubmissionRequest(List.of("youth group a"), "Loved the session")).getBody().id();
+
+        // Still waiting for review: refused, and the shared handler answers 409 with a message.
+        PublishRefusedException refused = assertThrows(PublishRefusedException.class, () -> controller.publish(id));
+        ResponseEntity<Map<String, Object>> error = errors.apiError(refused);
+        assertEquals(409, error.getStatusCode().value());
+        assertTrue(error.getBody().get("message").toString().contains("still needs review"));
+
+        app.queue.clear(app.reviewItems(id).get(0).getId(), "");
+        assertEquals(SubmissionStatus.CLEARED, controller.get(id).getBody().status(), "Clear alone does not publish");
+
+        ResponseEntity<SubmissionReceipt> published = controller.publish(id);
+        assertEquals(200, published.getStatusCode().value());
+        assertEquals(SubmissionStatus.PUBLISHED, published.getBody().status());
+        assertEquals(404, controller.publish("missing").getStatusCode().value());
+    }
 }

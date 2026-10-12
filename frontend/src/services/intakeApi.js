@@ -37,6 +37,15 @@ export function getSubmission(id) {
   return apiClient.get(`/intake/submissions/${encodeURIComponent(id)}`)
 }
 
+/**
+ * Publishes a submission whose flags have all been cleared. Clearing a flag never publishes;
+ * this is the separate, explicit action. The backend answers 409 with a reason if it is not
+ * allowed yet (a flag is still pending or was rejected, or the group is Tier 3).
+ */
+export function publishSubmission(id) {
+  return apiClient.post(`/intake/submissions/${encodeURIComponent(id)}/publish`)
+}
+
 /** Published submissions of one group, newest first. */
 export function listPublished(groupId) {
   return apiClient.get(`/intake/submissions?groupId=${encodeURIComponent(groupId)}`)

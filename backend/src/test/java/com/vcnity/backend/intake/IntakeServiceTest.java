@@ -134,19 +134,177 @@ class IntakeServiceTest {
     }
 
     @Test
-    void clearingTheFlagPublishesTheSubmission() {
+    void clearingTheFlagDoesNotPublishTheSubmission() {
+        // "Clear" and "publish" are two separate actions: resolving a flag never authorises publication.
         app.classify(GROUP, 1);
         app.pipeline.returnsFlagged("lowConfidence");
         SubmissionReceipt receipt = submit(GROUP);
 
         app.queue.clear(app.reviewItems(receipt.id()).get(0).getId(), "Checked against the source");
 
-        assertEquals(SubmissionStatus.PUBLISHED, app.intake.getReceipt(receipt.id()).orElseThrow().status());
+        SubmissionReceipt afterClear = app.intake.getReceipt(receipt.id()).orElseThrow();
+        assertEquals(SubmissionStatus.CLEARED, afterClear.status());
+        assertTrue(afterClear.message().contains("once a reviewer publishes it"));
+        assertTrue(app.intake.listPublished(GROUP).isEmpty(), "cleared is still hidden");
+        assertTrue(app.submissionStore.findByStatus(SubmissionStatus.PUBLISHED).isEmpty());
+    }
+
+    @Test
+    void aClearedSubmissionIsPublishedOnlyByTheSeparatePublishAction() {
+        app.classify(GROUP, 1);
+        app.pipeline.returnsFlagged("lowConfidence");
+        SubmissionReceipt receipt = submit(GROUP);
+        app.queue.clear(app.reviewItems(receipt.id()).get(0).getId(), "Checked against the source");
+
+        SubmissionReceipt published = app.intake.publish(receipt.id()).orElseThrow();
+
+        assertEquals(SubmissionStatus.PUBLISHED, published.status());
+        assertEquals(SubmissionStatus.PUBLISHED, app.stored(receipt.id()).getStatus());
+        assertNull(app.stored(receipt.id()).getStatusReason());
+        assertEquals(List.of(receipt.id()), app.intake.listPublished(GROUP).stream().map(PublishedSubmission::id).toList());
+    }
+
+    @Test
+    void publishIsRefusedWhileAFlagIsStillPendingAndSaysHowMany() {
+        app.classify(GROUP, 1);
+        app.pipeline.returnsFlagged("quoteNotGrounded, lowConfidence");
+        SubmissionReceipt receipt = submit(GROUP);
+        List<ExceptionItem> items = app.reviewItems(receipt.id());
+
+        PublishRefusedException none = assertThrows(PublishRefusedException.class, () -> app.intake.publish(receipt.id()));
+        assertEquals(409, none.getStatus());
+        assertTrue(none.getMessage().startsWith("2 flags"), none.getMessage());
+
+        app.queue.clear(items.get(0).getId(), "");
+        PublishRefusedException one = assertThrows(PublishRefusedException.class, () -> app.intake.publish(receipt.id()));
+        assertTrue(one.getMessage().startsWith("1 flag "), one.getMessage());
+
+        assertEquals(SubmissionStatus.PENDING_REVIEW, app.stored(receipt.id()).getStatus());
+        assertTrue(app.intake.listPublished(GROUP).isEmpty());
+    }
+
+    @Test
+    void publishIsRefusedForARejectedSubmission() {
+        app.classify(GROUP, 1);
+        app.pipeline.returnsFlagged("quoteNotGrounded");
+        SubmissionReceipt receipt = submit(GROUP);
+        app.queue.reject(app.reviewItems(receipt.id()).get(0).getId(), "Quote is not in the source");
+
+        PublishRefusedException refused = assertThrows(PublishRefusedException.class, () -> app.intake.publish(receipt.id()));
+
+        assertTrue(refused.getMessage().contains("rejected"));
+        assertEquals(SubmissionStatus.REJECTED, app.stored(receipt.id()).getStatus());
+    }
+
+    @Test
+    void publishingTwiceChangesNothingAndUnknownSubmissionIsEmpty() {
+        app.classify(GROUP, 1);
+        app.pipeline.returnsFlagged("lowConfidence");
+        SubmissionReceipt receipt = submit(GROUP);
+        app.queue.clear(app.reviewItems(receipt.id()).get(0).getId(), "");
+        app.intake.publish(receipt.id());
+
+        assertEquals(SubmissionStatus.PUBLISHED, app.intake.publish(receipt.id()).orElseThrow().status());
+        assertEquals(1, app.intake.listPublished(GROUP).size());
+        assertTrue(app.intake.publish("does-not-exist").isEmpty());
+    }
+
+    @Test
+    void clearingAFlagAgainNeverUnpublishesAPublishedSubmission() {
+        app.classify(GROUP, 1);
+        app.pipeline.returnsFlagged("lowConfidence");
+        SubmissionReceipt receipt = submit(GROUP);
+        String itemId = app.reviewItems(receipt.id()).get(0).getId();
+        app.queue.clear(itemId, "");
+        app.intake.publish(receipt.id());
+
+        app.queue.clear(itemId, "Cleared a second time");
+
+        assertEquals(SubmissionStatus.PUBLISHED, app.stored(receipt.id()).getStatus());
         assertEquals(1, app.intake.listPublished(GROUP).size());
     }
 
     @Test
-    void submissionWithTwoFlagsIsPublishedOnlyWhenBothAreCleared() {
+    void rejectingAFlagAfterPublishingHidesTheSubmissionAgain() {
+        app.classify(GROUP, 1);
+        app.pipeline.returnsFlagged("lowConfidence");
+        SubmissionReceipt receipt = submit(GROUP);
+        String itemId = app.reviewItems(receipt.id()).get(0).getId();
+        app.queue.clear(itemId, "");
+        app.intake.publish(receipt.id());
+
+        app.queue.reject(itemId, "On second look this should not be public");
+
+        assertEquals(SubmissionStatus.REJECTED, app.stored(receipt.id()).getStatus());
+        assertTrue(app.intake.listPublished(GROUP).isEmpty());
+    }
+
+    @Test
+    void aClearedSubmissionIsHaltedWhenItsGroupBecomesTier3AndCannotBePublished() {
+        app.classify(GROUP, 1);
+        app.pipeline.returnsFlagged("lowConfidence");
+        SubmissionReceipt receipt = submit(GROUP);
+        app.queue.clear(app.reviewItems(receipt.id()).get(0).getId(), "");
+        assertEquals(SubmissionStatus.CLEARED, app.stored(receipt.id()).getStatus());
+
+        ClassificationResult result = app.classify(GROUP, 3, "Chloee", "Now restricted");
+
+        assertEquals(List.of(receipt.id()), result.haltedSubmissionIds());
+        assertEquals(SubmissionStatus.HELD, app.stored(receipt.id()).getStatus());
+        PublishRefusedException refused = assertThrows(PublishRefusedException.class, () -> app.intake.publish(receipt.id()));
+        assertTrue(refused.getMessage().contains("Tier 3"));
+        assertTrue(app.submissionStore.findByStatus(SubmissionStatus.PUBLISHED).isEmpty());
+    }
+
+    @Test
+    void publishIsRefusedIntoATier3GroupEvenIfTheSubmissionWasNeverHalted() {
+        SubmissionStore haltDoesNothing = new DelegatingSubmissionStore(new InMemorySubmissionStore()) {
+            @Override
+            public List<Submission> haltUnpublishedForGroup(String groupId, String reason, Instant at) {
+                return List.of();
+            }
+        };
+        IntakeFixture unhalted = new IntakeFixture(haltDoesNothing);
+        unhalted.classify(GROUP, 1);
+        unhalted.pipeline.returnsFlagged("lowConfidence");
+        SubmissionReceipt receipt = unhalted.submit(TEXT, GROUP);
+        unhalted.queue.clear(unhalted.reviewItems(receipt.id()).get(0).getId(), "");
+        unhalted.classify(GROUP, 3, "Chloee", "Now restricted");
+        assertEquals(SubmissionStatus.CLEARED, unhalted.stored(receipt.id()).getStatus(), "not halted in this test");
+
+        assertThrows(PublishRefusedException.class, () -> unhalted.intake.publish(receipt.id()));
+
+        assertEquals(SubmissionStatus.CLEARED, unhalted.stored(receipt.id()).getStatus());
+        assertTrue(unhalted.submissionStore.findByStatus(SubmissionStatus.PUBLISHED).isEmpty());
+    }
+
+    @Test
+    void publishCannotOverwriteAHaltThatHappensAtTheSameMoment() {
+        // The submission is halted in the instant between publish reading it and writing the new status.
+        InMemorySubmissionStore real = new InMemorySubmissionStore();
+        SubmissionStore haltsJustBeforeTheWrite = new DelegatingSubmissionStore(real) {
+            @Override
+            public boolean changeStatus(String id, SubmissionStatus from, SubmissionStatus to, String reason, Instant at) {
+                if (to == SubmissionStatus.PUBLISHED) {
+                    real.haltUnpublishedForGroup(GROUP, IntakeService.HALTED_REASON, Instant.now());
+                }
+                return super.changeStatus(id, from, to, reason, at);
+            }
+        };
+        IntakeFixture racing = new IntakeFixture(haltsJustBeforeTheWrite);
+        racing.classify(GROUP, 1);
+        racing.pipeline.returnsFlagged("lowConfidence");
+        SubmissionReceipt receipt = racing.submit(TEXT, GROUP);
+        racing.queue.clear(racing.reviewItems(receipt.id()).get(0).getId(), "");
+
+        assertThrows(PublishRefusedException.class, () -> racing.intake.publish(receipt.id()));
+
+        assertEquals(SubmissionStatus.HELD, racing.stored(receipt.id()).getStatus(), "the halt must win");
+        assertTrue(racing.intake.listPublished(GROUP).isEmpty());
+    }
+
+    @Test
+    void submissionWithTwoFlagsIsReadyToPublishOnlyWhenBothAreCleared() {
         app.classify(GROUP, 1);
         app.pipeline.returnsFlagged("quoteNotGrounded, lowConfidence");
         SubmissionReceipt receipt = submit(GROUP);
@@ -158,6 +316,10 @@ class IntakeServiceTest {
         assertTrue(app.intake.listPublished(GROUP).isEmpty());
 
         app.queue.clear(items.get(1).getId(), "");
+        assertEquals(SubmissionStatus.CLEARED, app.stored(receipt.id()).getStatus());
+        assertTrue(app.intake.listPublished(GROUP).isEmpty(), "still hidden until someone publishes it");
+
+        app.intake.publish(receipt.id());
         assertEquals(SubmissionStatus.PUBLISHED, app.stored(receipt.id()).getStatus());
     }
 
@@ -175,8 +337,12 @@ class IntakeServiceTest {
         assertEquals(TEXT, rejected.getText(), "a rejected submission is hidden, not deleted");
         assertTrue(app.intake.listPublished(GROUP).isEmpty());
 
-        // A reviewer who changes their mind can clear the same item and bring it back.
+        // A reviewer who changes their mind can clear the same item. That makes it publishable again,
+        // but it is still not published until someone publishes it.
         app.queue.clear(itemId, "Re-checked: quote is acceptable");
+        assertEquals(SubmissionStatus.CLEARED, app.stored(receipt.id()).getStatus());
+        assertTrue(app.intake.listPublished(GROUP).isEmpty());
+        app.intake.publish(receipt.id());
         assertEquals(SubmissionStatus.PUBLISHED, app.stored(receipt.id()).getStatus());
     }
 
@@ -229,7 +395,7 @@ class IntakeServiceTest {
     @Test
     void anotherFeaturesItemCannotPublishASubmissionThatHasNoReviewItemsOfItsOwn() {
         app.classify(GROUP, 1);
-        app.pipeline.returnsFlagged("UNSUPPORTED_TEST_FLAG"); // hidden, with no review item the queue understands
+        app.pipeline.returnsFlagged("REPRESENTATION_GAP"); // hidden, with no review item the queue understands
         SubmissionReceipt receipt = submit(GROUP);
         ExceptionItem otherFeature = new ExceptionItem(null, FlagType.CONTESTED, "q", "c", 0.6, receipt.id());
         otherFeature.setSourceType("CODING_FINDING");
@@ -506,6 +672,7 @@ class IntakeServiceTest {
         assertFalse(storedText.contains("Maria"));
         assertFalse(storedText.contains("0412"));
         app.queue.clear(app.reviewItems(receipt.id()).get(0).getId(), "");
+        app.intake.publish(receipt.id());
         assertEquals(storedText, app.intake.listPublished(GROUP).get(0).text());
     }
 
@@ -676,7 +843,7 @@ class IntakeServiceTest {
     @Test
     void flagTheQueueDoesNotKnowStaysHiddenAndSaysItNeedsManualReview() {
         app.classify(GROUP, 1);
-        app.pipeline.returnsFlagged("UNSUPPORTED_TEST_FLAG");
+        app.pipeline.returnsFlagged("REPRESENTATION_GAP");
 
         SubmissionReceipt receipt = submit(GROUP);
 
@@ -721,8 +888,31 @@ class IntakeServiceTest {
         assertEquals(FlagType.QUOTE_NOT_FOUND, restored.get(0).getFlagType());
 
         queueAfterRestart.clear(restored.get(0).getId(), "");
-        assertEquals(SubmissionStatus.PUBLISHED, app.stored(receipt.id()).getStatus());
+        assertEquals(SubmissionStatus.CLEARED, app.stored(receipt.id()).getStatus());
         assertEquals(0, intakeAfterRestart.restoreReviewQueue(), "restoring twice must not duplicate review items");
+    }
+
+    @Test
+    void clearedButUnpublishedSubmissionGetsItsItemBackAsClearedAfterARestart() {
+        app.classify(GROUP, 1);
+        app.pipeline.returnsFlagged("quoteNotGrounded");
+        SubmissionReceipt receipt = submit(GROUP);
+        app.queue.clear(app.reviewItems(receipt.id()).get(0).getId(), "Checked");
+
+        ExceptionsQueueService queueAfterRestart = new ExceptionsQueueService();
+        IntakeService intakeAfterRestart = new IntakeService(
+                new GroupTierService(app.tierStore), app.submissionStore, app.pipeline, queueAfterRestart);
+        intakeAfterRestart.restoreReviewQueueAtStartup();
+
+        List<ExceptionItem> restored = queueAfterRestart.listBySource(IntakeService.SOURCE_TYPE, receipt.id());
+        assertEquals(1, restored.size());
+        assertEquals(ReviewStatus.CLEARED, restored.get(0).getStatus(), "it must not come back as pending");
+        assertTrue(queueAfterRestart.listPending().isEmpty());
+        assertEquals(SubmissionStatus.CLEARED, app.stored(receipt.id()).getStatus());
+
+        // The reviewer can still publish it after the restart.
+        assertEquals(SubmissionStatus.PUBLISHED, intakeAfterRestart.publish(receipt.id()).orElseThrow().status());
+        assertEquals(0, intakeAfterRestart.restoreReviewQueue());
     }
 
     @Test

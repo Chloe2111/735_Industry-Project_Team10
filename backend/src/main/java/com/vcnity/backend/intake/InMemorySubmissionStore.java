@@ -81,6 +81,7 @@ public class InMemorySubmissionStore implements SubmissionStore {
             // computeIfPresent re-checks the status at the moment of the change, as the bulk update does.
             submissions.computeIfPresent(id, (key, stored) -> {
                 boolean unpublished = stored.getStatus() == SubmissionStatus.PENDING_REVIEW
+                        || stored.getStatus() == SubmissionStatus.CLEARED
                         || stored.getStatus() == SubmissionStatus.REJECTED;
                 if (!unpublished || !stored.getGroupIds().contains(groupId)) {
                     return stored;
