@@ -395,7 +395,7 @@ class IntakeServiceTest {
     @Test
     void anotherFeaturesItemCannotPublishASubmissionThatHasNoReviewItemsOfItsOwn() {
         app.classify(GROUP, 1);
-        app.pipeline.returnsFlagged("REPRESENTATION_GAP"); // hidden, with no review item the queue understands
+        app.pipeline.returnsFlagged("UNSUPPORTED_TEST_FLAG"); // hidden, with no review item the queue understands
         SubmissionReceipt receipt = submit(GROUP);
         ExceptionItem otherFeature = new ExceptionItem(null, FlagType.CONTESTED, "q", "c", 0.6, receipt.id());
         otherFeature.setSourceType("CODING_FINDING");
@@ -843,7 +843,7 @@ class IntakeServiceTest {
     @Test
     void flagTheQueueDoesNotKnowStaysHiddenAndSaysItNeedsManualReview() {
         app.classify(GROUP, 1);
-        app.pipeline.returnsFlagged("REPRESENTATION_GAP");
+        app.pipeline.returnsFlagged("UNSUPPORTED_TEST_FLAG");
 
         SubmissionReceipt receipt = submit(GROUP);
 

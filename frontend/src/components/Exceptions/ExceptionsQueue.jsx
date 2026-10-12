@@ -4,6 +4,7 @@ import { useToast } from '../Toast/ToastProvider'
 import './ExceptionsQueue.css'
 
 const FLAG_HELP = {
+  REPRESENTATION_GAP: 'The coverage check found a missing speaker contribution. Review the source coverage before clearing.',
   QUOTE_NOT_FOUND: 'Quoted evidence could not be located in the source.',
   LOW_CONFIDENCE: 'AI confidence fell below the review threshold.',
   SOURCE_MISSING: 'No traceable source was available for this finding.',
