@@ -29,3 +29,5 @@ application-local.properties
 
 # Node dependencies
 node_modules/
+# Build output
+dist/

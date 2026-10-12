@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { ToastProvider } from './components/Toast/ToastProvider'
+import CommunityWorkspace from './components/Community/CommunityWorkspace'
 import ExceptionsQueue from './components/Exceptions/ExceptionsQueue'
 import CommunitySubmissionPage from './pages/CommunitySubmissionPage'
 import { getSubmission, publishSubmission } from './services/intakeApi'
 
-// Two screens and no router yet: a simple switch keeps Story 24 and Story 19 both reachable.
+// No router yet: a simple switch keeps Story 17, Story 24 and Story 19 all reachable.
 // Replace this with the team's shared navigation when it exists.
 const VIEWS = [
+  { id: 'workspace', label: 'Community workspace' },
   { id: 'submit', label: 'Share feedback' },
   { id: 'exceptions', label: 'Exceptions queue' },
 ]
@@ -16,7 +18,7 @@ const VIEWS = [
 const COMMUNITY_SUBMISSIONS = { getStatus: getSubmission, publish: publishSubmission }
 
 export default function App() {
-  const [view, setView] = useState('submit')
+  const [view, setView] = useState('workspace')
 
   return (
     <ToastProvider>
@@ -33,11 +35,15 @@ export default function App() {
           </button>
         ))}
       </nav>
-      {/* The submission page stays mounted so a receipt is still there after a visit to the queue. */}
+      {/* Story 17: the community workspace stays mounted so its state survives switching tabs. */}
+      <div hidden={view !== 'workspace'}>
+        <CommunityWorkspace />
+      </div>
+      {/* Story 24: the submission page stays mounted so a receipt is still there after a visit to the queue. */}
       <div hidden={view !== 'submit'}>
         <CommunitySubmissionPage />
       </div>
-      {/* The queue is mounted on each visit so it always loads the latest items. */}
+      {/* Story 19: the queue is mounted on each visit so it always loads the latest items. */}
       {view === 'exceptions' && <ExceptionsQueue communitySubmissions={COMMUNITY_SUBMISSIONS} />}
     </ToastProvider>
   )
