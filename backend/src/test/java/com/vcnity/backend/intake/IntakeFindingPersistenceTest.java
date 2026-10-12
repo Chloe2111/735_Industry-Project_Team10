@@ -48,7 +48,7 @@ class IntakeFindingPersistenceTest {
                 submissions, runner, queue);
 
         intake.classifyGroup(new TierRequest(
-                GROUP, null, 1, "Test reviewer", "Synthetic test"));
+                GROUP, null, 1, "Test reviewer", "Synthetic test", null));
 
         return new Fixture(intake, submissions, queue, calls);
     }
@@ -65,7 +65,10 @@ class IntakeFindingPersistenceTest {
     }
 
     private void assertNoSubmissionOrReviewItems(Fixture fixture) {
-        assertTrue(fixture.submissions().findByGroupId(GROUP).isEmpty());
+        String groupId = GroupTierService.normaliseGroupId(GROUP);
+        for (SubmissionStatus status : SubmissionStatus.values()) {
+            assertTrue(fixture.submissions().findByGroupIdAndStatus(groupId, status).isEmpty());
+        }
         assertTrue(fixture.intake().listPublished(GROUP).isEmpty());
         assertTrue(fixture.queue().list().isEmpty());
     }

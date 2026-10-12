@@ -3,6 +3,7 @@ import { ToastProvider } from './components/Toast/ToastProvider'
 import CommunityWorkspace from './components/Community/CommunityWorkspace'
 import ExceptionsQueue from './components/Exceptions/ExceptionsQueue'
 import CommunitySubmissionPage from './pages/CommunitySubmissionPage'
+import { getSubmission, publishSubmission } from './services/intakeApi'
 
 // No router yet: a simple switch keeps Story 17, Story 24 and Story 19 all reachable.
 // Replace this with the team's shared navigation when it exists.
@@ -11,6 +12,10 @@ const VIEWS = [
   { id: 'submit', label: 'Share feedback' },
   { id: 'exceptions', label: 'Exceptions queue' },
 ]
+
+// Gives the review screen the two things it needs to publish a community submission.
+// Clearing a flag never publishes; publishing is this separate, explicit action.
+const COMMUNITY_SUBMISSIONS = { getStatus: getSubmission, publish: publishSubmission }
 
 export default function App() {
   const [view, setView] = useState('workspace')
@@ -39,7 +44,7 @@ export default function App() {
         <CommunitySubmissionPage />
       </div>
       {/* Story 19: the queue is mounted on each visit so it always loads the latest items. */}
-      {view === 'exceptions' && <ExceptionsQueue />}
+      {view === 'exceptions' && <ExceptionsQueue communitySubmissions={COMMUNITY_SUBMISSIONS} />}
     </ToastProvider>
   )
 }

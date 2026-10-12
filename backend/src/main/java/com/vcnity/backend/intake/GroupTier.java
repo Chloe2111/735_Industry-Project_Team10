@@ -1,6 +1,7 @@
 package com.vcnity.backend.intake;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
@@ -25,6 +26,13 @@ public class GroupTier {
     private String reason;
     private Instant setAt;
     private List<TierChange> history = new ArrayList<>();
+    /**
+     * Counts saves of this record: null before the first save, then 0, 1, 2...
+     * The database refuses a save whose version is not the stored one, so two people
+     * changing the same group at once cannot silently overwrite each other.
+     */
+    @Version
+    private Long version;
 
     public GroupTier() {
     }
@@ -69,6 +77,7 @@ public class GroupTier {
         c.setBy = setBy;
         c.reason = reason;
         c.setAt = setAt;
+        c.version = version;
         for (TierChange h : history) {
             c.history.add(new TierChange(h.fromTier, h.toTier, h.setBy, h.reason, h.at));
         }
@@ -87,6 +96,8 @@ public class GroupTier {
     public void setReason(String reason) { this.reason = reason; }
     public Instant getSetAt() { return setAt; }
     public void setSetAt(Instant setAt) { this.setAt = setAt; }
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
     public List<TierChange> getHistory() { return history; }
     public void setHistory(List<TierChange> history) { this.history = history == null ? new ArrayList<>() : new ArrayList<>(history); }
 }

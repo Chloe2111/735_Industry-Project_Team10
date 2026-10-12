@@ -53,7 +53,7 @@ class DefaultPipelineRunnerTest {
                 new InMemorySubmissionStore(), runner, queue
         );
         intake.classifyGroup(new TierRequest(
-                GROUP, null, 1, "Test reviewer", "Synthetic test classification"
+                GROUP, null, 1, "Test reviewer", "Synthetic test classification", null
         ));
         return intake;
     }

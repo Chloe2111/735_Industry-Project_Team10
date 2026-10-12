@@ -22,6 +22,11 @@ public class ExceptionItem {
     private String sourceType;
     /** Optional id of the record in the feature named by sourceType. */
     private String sourceId;
+    /**
+     * When set, this item must not be cleared, and this text says why (shown to the reviewer).
+     * It can still be rejected. Null for normal items.
+     */
+    private String blockedReason;
 
     public ExceptionItem() {}
 
@@ -61,4 +66,6 @@ public class ExceptionItem {
     public void setSourceType(String sourceType) { this.sourceType = sourceType; }
     public String getSourceId() { return sourceId; }
     public void setSourceId(String sourceId) { this.sourceId = sourceId; }
+    public String getBlockedReason() { return blockedReason; }
+    public void setBlockedReason(String blockedReason) { this.blockedReason = blockedReason; }
 }

@@ -71,7 +71,7 @@ class IntakeFindingMongoIntegrationTest {
 
         String group = "synthetic workshop group";
         intake.classifyGroup(new TierRequest(
-                group, null, 1, "Test reviewer", "Synthetic integration test"));
+                group, null, 1, "Test reviewer", "Synthetic integration test", null));
 
         SubmissionReceipt receipt = intake.submit(new SubmissionRequest(
                 List.of(group),
@@ -116,9 +116,9 @@ class IntakeFindingMongoIntegrationTest {
         var reviewItems =
                 queue.listBySource(IntakeService.SOURCE_TYPE, receipt.id());
         assertEquals(1, reviewItems.size());
-        assertEquals(
-                List.of(reviewItems.get(0).getId()),
-                submissions.findById(receipt.id()).orElseThrow().getExceptionIds()
-        );
+        // The review item points back to this submission, which stays hidden while it waits.
+        assertEquals(receipt.id(), reviewItems.get(0).getSourceId());
+        assertEquals(SubmissionStatus.PENDING_REVIEW,
+                submissions.findById(receipt.id()).orElseThrow().getStatus());
     }
 }

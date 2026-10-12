@@ -11,6 +11,11 @@
 
 import { apiClient } from './apiClient'
 
+/** Mirrors the backend rule: group names match regardless of case and extra spaces. */
+export function normaliseGroupId(value) {
+  return (value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
 /**
  * Submits feedback for a group.
  *
@@ -21,7 +26,7 @@ import { apiClient } from './apiClient'
  * from the group's own record.
  *
  * Returns the receipt:
- *   { id, status, tier, tierLabel, groupIds, message, submittedAt }
+ *   { id, status, tier, groupIds, message, submittedAt }
  */
 export function submitFeedback(payload) {
   return apiClient.post('/intake/submissions', payload)
@@ -32,19 +37,32 @@ export function getSubmission(id) {
   return apiClient.get(`/intake/submissions/${encodeURIComponent(id)}`)
 }
 
+/**
+ * Publishes a submission whose flags have all been cleared. Clearing a flag never publishes;
+ * this is the separate, explicit action. The backend answers 409 with a reason if it is not
+ * allowed yet (a flag is still pending or was rejected, or the group is Tier 3).
+ */
+export function publishSubmission(id) {
+  return apiClient.post(`/intake/submissions/${encodeURIComponent(id)}/publish`)
+}
+
 /** Published submissions of one group, newest first. */
 export function listPublished(groupId) {
   return apiClient.get(`/intake/submissions?groupId=${encodeURIComponent(groupId)}`)
 }
 
-/** Every group that a person has classified, with its tier and history. */
+/** Every group that a person has classified, with its tier, history and version. */
 export function listGroupTiers() {
   return apiClient.get('/intake/group-tiers')
 }
 
 /**
  * Sets or changes a group's tier.
- * body shape (must match TierRequest.java): { groupId, tier, setBy, reason }
+ * body shape (must match TierRequest.java): { groupId, tier, setBy, reason, expectedVersion }
+ *
+ * expectedVersion is the `version` of the group as it was last loaded, or null for a group that
+ * is not classified yet. If someone else changed the group in the meantime the backend answers
+ * 409 and saves nothing, so one coordinator cannot silently overwrite another.
  */
 export function setGroupTier(body) {
   return apiClient.put('/intake/group-tiers', body)

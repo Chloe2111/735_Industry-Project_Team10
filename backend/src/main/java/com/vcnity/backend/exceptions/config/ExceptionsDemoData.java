@@ -4,6 +4,7 @@ import com.vcnity.backend.exceptions.model.ExceptionItem;
 import com.vcnity.backend.exceptions.model.FlagType;
 import com.vcnity.backend.exceptions.service.ExceptionsQueueService;
 import jakarta.annotation.PostConstruct;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
  * queue service/API without changing the UI.
  */
 @Component
+@Profile("dev")
 public class ExceptionsDemoData {
     private final ExceptionsQueueService service;
 

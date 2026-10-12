@@ -1,10 +1,11 @@
-import { tierName } from './tiers'
+import { tierName } from '../../constants/tiers'
 
 const STATUS_LABELS = {
   PUBLISHED: 'Published',
   PENDING_REVIEW: 'Waiting for a person to review',
+  CLEARED: 'Checked – waiting to be published',
   REJECTED: 'Not published',
-  HELD: 'Held – not processed',
+  HELD: 'Held – not published',
 }
 
 /**
@@ -36,7 +37,7 @@ export default function SubmissionReceipt({ receipt, groupLabel = (id) => id, on
           <dd>{receipt.id}</dd>
         </div>
       </dl>
-      {receipt.status === 'PENDING_REVIEW' && (
+      {(receipt.status === 'PENDING_REVIEW' || receipt.status === 'CLEARED') && (
         <button type="button" className="btn btn--secondary" onClick={onRefresh} disabled={refreshing}>
           {refreshing ? 'Checking…' : 'Check status'}
         </button>

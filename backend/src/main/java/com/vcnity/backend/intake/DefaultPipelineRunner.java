@@ -139,6 +139,15 @@ public class DefaultPipelineRunner implements PipelineRunner {
     }
 
     /**
+     * Same call and same term lists as the de-identification step inside PipelineService.
+     * Intake stores and publishes only this de-identified text.
+     */
+    @Override
+    public String deidentify(String text) {
+        return Deidentify.deidentify(text, gazetteer, vernacularTerms).redactedText();
+    }
+
+    /**
      * Saves existing findings only; never reruns coding or writes to the queue.
      * Any failure propagates before intake receives a publishable outcome.
      */
