@@ -12,10 +12,6 @@ target/
 # OS files
 .DS_Store
 Thumbs.db
-<<<<<<< HEAD
-# Frontend dependencies
-node_modules/ 
-=======
 # Python virtual environments and generated files
 .venv/
 __pycache__/
@@ -30,5 +26,8 @@ application-local.properties
 
 # Temporary Microsoft Word files
 ~$*
->>>>>>> origin/main
+
+# Node dependencies
+node_modules/
+# Build output
 dist/
