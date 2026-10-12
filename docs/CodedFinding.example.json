@@ -1,0 +1,10 @@
+{
+    "itemId": "synthetic_finding_001",
+    "sourceRef": "synthetic_transcript_001",
+    "speakerCode": "PERSON_001",
+    "theme": "Access to community activities",
+    "quote": "We need affordable transport to attend community workshops.",
+    "confidence": 0.92,
+    "tier": 2,
+    "flags": []
+}

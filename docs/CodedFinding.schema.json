@@ -1,0 +1,83 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "CodedFinding",
+    "description": "Shared pipeline finding contract. A finding is not approved for publication merely because it exists or has no flags.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "itemId",
+        "sourceRef",
+        "speakerCode",
+        "theme",
+        "quote",
+        "confidence",
+        "tier",
+        "flags"
+    ],
+    "properties": {
+        "itemId": {
+            "$ref": "#/$defs/nonBlankString",
+            "description": "Identifier of the individual finding."
+        },
+        "sourceRef": {
+            "$ref": "#/$defs/nonBlankString",
+            "description": "Reference to the source transcript used for this finding."
+        },
+        "speakerCode": {
+            "description": "Pseudonymous speaker code, or null when unavailable. Do not substitute the finding ID for a missing speaker code.",
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/nonBlankString"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "theme": {
+            "$ref": "#/$defs/nonBlankString",
+            "description": "Theme assigned to the finding."
+        },
+        "quote": {
+            "$ref": "#/$defs/nonBlankString",
+            "description": "Evidence quotation to check against the referenced de-identified transcript."
+        },
+        "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confidence score between 0 and 1 inclusive. This is not human approval."
+        },
+        "tier": {
+            "type": "integer",
+            "enum": [
+                1,
+                2
+            ],
+            "description": "Source tier accepted by CodedFinding. Tier 3 is excluded."
+        },
+        "flags": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+                "type": "string",
+                "enum": [
+                    "quoteNotGrounded",
+                    "lowConfidence",
+                    "sourceMissing",
+                    "contradiction",
+                    "tierViolation"
+                ]
+            },
+            "description": "Recorded check failures. An empty array does not prove that checks ran or that human approval was granted."
+        }
+    },
+    "$defs": {
+        "nonBlankString": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "[^\\u0009-\\u000D\\u001C-\\u0020\\u1680\\u2000-\\u2006\\u2008-\\u200A\\u2028\\u2029\\u205F\\u3000]",
+            "description": "Contains at least one character not treated as whitespace by Java 17 String.isBlank()."
+        }
+    }
+}

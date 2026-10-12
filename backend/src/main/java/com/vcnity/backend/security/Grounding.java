@@ -1,25 +1,15 @@
 package com.vcnity.backend.security;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Grounding.java
+ * Deterministic checks for coded findings.
  *
- * The deterministic checks that run on every AI-coded item before it
- * can be marked "clean" and skip human review.
- *
- * Fixes the bug the adversarial review flagged: the original quote-
- * match logic stripped ALL whitespace from both the quote and the
- * source before comparing them as substrings, which let fabricated
- * fragments pass as "grounded" if they matched across word boundaries.
- *
- * The fix below normalises whitespace (collapses, doesn't delete it)
- * and matches on real word boundaries, so a quote only counts as
- * grounded if it appears as an actual contiguous sequence of whole
- * words in the source.
+ * Passing these checks does not establish semantic correctness
+ * or replace required human verification.
  */
 public final class Grounding {
 
@@ -28,30 +18,60 @@ public final class Grounding {
     private Grounding() {
     }
 
-    /** Collapse whitespace and lowercase. Does NOT delete whitespace — that was the original bug. */
+    /**
+     * Fixed comparison rule:
+     * 1. Collapse ASCII whitespace to one ordinary space.
+     * 2. Remove leading and trailing ordinary spaces.
+     * 3. Lowercase independently of the computer's default locale.
+     *
+     * Original source text and quotes remain unchanged.
+     */
     public static String normalize(String text) {
-        return text.trim().replaceAll("\\s+", " ").toLowerCase();
+        if (text == null) {
+            throw new IllegalArgumentException(
+                    "Text to normalise must not be null"
+            );
+        }
+
+        return text
+                .replaceAll("[ \\t\\n\\x0B\\f\\r]+", " ")
+                .replaceAll("^ +| +$", "")
+                .toLowerCase(Locale.ROOT);
     }
 
     /**
-     * True only if {@code quote} appears in {@code sourceText} as a
-     * contiguous sequence of whole words (word-boundary match), not as
-     * an arbitrary substring.
+     * Checks for a literal quote match after normalisation.
+     *
+     * Retains the existing word-character boundary guards.
+     * This is case-insensitive comparison, not paraphrase matching.
      */
-    public static boolean quoteIsGrounded(String quote, String sourceText) {
-        if (quote == null || quote.isEmpty() || sourceText == null || sourceText.isEmpty()) {
+    public static boolean quoteIsGrounded(
+            String quote,
+            String sourceText
+    ) {
+        if (quote == null || quote.isEmpty()
+                || sourceText == null || sourceText.isEmpty()) {
             return false;
         }
-        String q = normalize(quote);
-        String s = normalize(sourceText);
-        if (q.isEmpty()) {
+
+        String normalizedQuote = normalize(quote);
+        String normalizedSource = normalize(sourceText);
+
+        if (normalizedQuote.isEmpty()) {
             return false;
         }
-        Pattern pattern = Pattern.compile("(?<!\\w)" + Pattern.quote(q) + "(?!\\w)");
-        return pattern.matcher(s).find();
+
+        Pattern pattern = Pattern.compile(
+                "(?<!\\w)"
+                        + Pattern.quote(normalizedQuote)
+                        + "(?!\\w)"
+        );
+
+        return pattern.matcher(normalizedSource).find();
     }
 
     public static final class GroundingFlags {
+
         public boolean sourceMissing = false;
         public boolean quoteNotGrounded = false;
         public boolean lowConfidence = false;
@@ -59,70 +79,149 @@ public final class Grounding {
         public boolean contradiction = false;
 
         public boolean any() {
-            return sourceMissing || quoteNotGrounded || lowConfidence || tierViolation || contradiction;
+            return sourceMissing
+                    || quoteNotGrounded
+                    || lowConfidence
+                    || tierViolation
+                    || contradiction;
         }
 
         public Map<String, Boolean> asMap() {
-            Map<String, Boolean> m = new HashMap<>();
-            m.put("sourceMissing", sourceMissing);
-            m.put("quoteNotGrounded", quoteNotGrounded);
-            m.put("lowConfidence", lowConfidence);
-            m.put("tierViolation", tierViolation);
-            m.put("contradiction", contradiction);
-            return m;
+            Map<String, Boolean> flags = new HashMap<>();
+
+            flags.put("sourceMissing", sourceMissing);
+            flags.put("quoteNotGrounded", quoteNotGrounded);
+            flags.put("lowConfidence", lowConfidence);
+            flags.put("tierViolation", tierViolation);
+            flags.put("contradiction", contradiction);
+
+            return flags;
         }
     }
 
-    public record GroundingResult(String itemId, boolean isClean, GroundingFlags flags) {
+    public record GroundingResult(
+            String itemId,
+            boolean isClean,
+            GroundingFlags flags
+    ) {
     }
 
     /**
-     * codedItem keys expected: itemId, sourceRef, quote, confidence
-     * (Double), tier (Integer), contradictsPriorTheme (Boolean,
-     * optional).
-     * sourceLookup: sourceRef -> full source text, built from the
-     * corpus BEFORE coding runs (so a missing source is a real
-     * integrity failure, not a lookup-order bug).
+     * Existing Map-based interface used by PipelineService.
+     *
+     * Expected keys:
+     * itemId, sourceRef, quote, confidence, tier
+     * and optional contradictsPriorTheme.
+     *
+     * sourceLookup maps source references to the de-identified
+     * transcript text supplied to the coder.
+     *
+     * Callers must validate field types before calling this method.
      */
-    public static GroundingResult ground(Map<String, Object> codedItem, Map<String, String> sourceLookup) {
-        String itemId = codedItem.get("itemId") != null ? codedItem.get("itemId").toString() : "<unknown>";
+    public static GroundingResult ground(
+            Map<String, Object> codedItem,
+            Map<String, String> sourceLookup
+    ) {
+        if (codedItem == null) {
+            throw new IllegalArgumentException(
+                    "Coded item must not be null"
+            );
+        }
+
+        if (sourceLookup == null) {
+            throw new IllegalArgumentException(
+                    "Source lookup must not be null"
+            );
+        }
+
+        String itemId = codedItem.get("itemId") != null
+                ? codedItem.get("itemId").toString()
+                : "<unknown>";
+
         GroundingFlags flags = new GroundingFlags();
 
-        Object sourceRefObj = codedItem.get("sourceRef");
-        String sourceRef = sourceRefObj != null ? sourceRefObj.toString() : null;
-        String sourceText = sourceRef != null ? sourceLookup.get(sourceRef) : null;
+        Object sourceRefObject = codedItem.get("sourceRef");
 
-        // Fix for the second bug the review found: SOURCE_MISSING was
-        // unreachable because the original code looked the source up
-        // AFTER already assuming it existed. Here the existence check
-        // happens first and is the only thing gating the rest.
+        String sourceRef = sourceRefObject != null
+                ? sourceRefObject.toString()
+                : null;
+
+        String sourceText = sourceRef != null
+                ? sourceLookup.get(sourceRef)
+                : null;
+
         if (sourceText == null) {
             flags.sourceMissing = true;
             return new GroundingResult(itemId, false, flags);
         }
 
-        String quote = codedItem.get("quote") != null ? codedItem.get("quote").toString() : "";
+        String quote = codedItem.get("quote") != null
+                ? codedItem.get("quote").toString()
+                : "";
+
         if (!quoteIsGrounded(quote, sourceText)) {
             flags.quoteNotGrounded = true;
         }
 
-        double confidence = codedItem.get("confidence") != null ? ((Number) codedItem.get("confidence")).doubleValue() : 0.0;
+        double confidence = codedItem.get("confidence") != null
+                ? ((Number) codedItem.get("confidence")).doubleValue()
+                : 0.0;
+
         if (confidence < CONFIDENCE_THRESHOLD) {
             flags.lowConfidence = true;
         }
 
-        Object tierObj = codedItem.get("tier");
-        if (tierObj != null && ((Number) tierObj).intValue() == 3) {
+        Object tierObject = codedItem.get("tier");
+
+        if (tierObject != null
+                && ((Number) tierObject).intValue() == 3) {
             flags.tierViolation = true;
         }
 
-        // Contradiction scan is intentionally a hook, not a full NLP
-        // model, for this MVP — wire in a real check before the real pilot.
+        // Existing hook only, not automatic contradiction detection.
         Object contradicts = codedItem.get("contradictsPriorTheme");
+
         if (Boolean.TRUE.equals(contradicts)) {
             flags.contradiction = true;
         }
 
-        return new GroundingResult(itemId, !flags.any(), flags);
+        return new GroundingResult(
+                itemId,
+                !flags.any(),
+                flags
+        );
+    }
+
+    /**
+     * Connects the new structured finding to the existing checker.
+     *
+     * Recomputes checks instead of trusting previous finding flags.
+     * This adapter does not perform contradiction detection.
+     */
+    public static GroundingResult groundFinding(
+            CodedFinding finding,
+            Map<String, String> sourceLookup
+    ) {
+        if (finding == null) {
+            throw new IllegalArgumentException(
+                    "Finding must not be null"
+            );
+        }
+
+        if (sourceLookup == null) {
+            throw new IllegalArgumentException(
+                    "Source lookup must not be null"
+            );
+        }
+
+        Map<String, Object> codedItem = new HashMap<>();
+
+        codedItem.put("itemId", finding.itemId());
+        codedItem.put("sourceRef", finding.sourceRef());
+        codedItem.put("quote", finding.quote());
+        codedItem.put("confidence", finding.confidence());
+        codedItem.put("tier", finding.tier());
+
+        return ground(codedItem, sourceLookup);
     }
 }

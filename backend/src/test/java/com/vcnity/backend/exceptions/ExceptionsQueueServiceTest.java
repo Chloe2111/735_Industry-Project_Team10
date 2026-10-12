@@ -252,4 +252,25 @@ class ExceptionsQueueServiceTest {
         assertEquals(java.util.Set.of("SUB-1"), service.sourceIds("COMMUNITY_SUBMISSION"));
         assertTrue(service.sourceIds("OTHER").isEmpty());
     }
+
+    @Test
+    void mapsAndImportsTierViolationForHumanReview() {
+        assertEquals(
+                List.of(FlagType.TIER_VIOLATION),
+                service.mapReason("tierViolation")
+        );
+
+        PipelineService.PipelineOutcome outcome = new PipelineService.PipelineOutcome(
+                "SRC-TIER", "exceptions_queue", "tierViolation",
+                "Community feedback", "Synthetic quotation", 0.8, 0
+        );
+
+        List<ExceptionItem> imported =
+                service.addFromPipelineOutcome(outcome, "Synthetic source context");
+
+        assertEquals(1, imported.size());
+        assertEquals(FlagType.TIER_VIOLATION, imported.get(0).getFlagType());
+        assertEquals(ReviewStatus.PENDING, imported.get(0).getStatus());
+        assertEquals("SRC-TIER", imported.get(0).getSourceRef());
+    }
 }

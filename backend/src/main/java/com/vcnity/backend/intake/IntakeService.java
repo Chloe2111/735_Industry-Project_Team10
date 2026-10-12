@@ -538,7 +538,7 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
     }
 
     private static String unavailableMessage() {
-        return "Your feedback could not be checked right now, so it was not saved or published. Please try again.";
+        return "Your submission could not be completed and has not been published. Please try again later.";
     }
 
     private static void copyCodingResult(Submission submission, PipelineService.PipelineOutcome outcome) {

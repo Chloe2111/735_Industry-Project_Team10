@@ -3,25 +3,18 @@ package com.vcnity.backend.exceptions.config;
 import com.vcnity.backend.exceptions.model.ExceptionItem;
 import com.vcnity.backend.exceptions.model.FlagType;
 import com.vcnity.backend.exceptions.service.ExceptionsQueueService;
-import com.vcnity.backend.security.Deidentify;
-import com.vcnity.backend.security.PipelineService;
 import jakarta.annotation.PostConstruct;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
  * Lightweight Story 19 MVP seed data so all required AI flags are immediately
- * visible to a reviewer. Only active in the "dev" profile, so a normal start never
- * puts made-up items in the queue:
- *   mvn spring-boot:run -Dspring-boot.run.profiles=dev Real pipeline outcomes can be added through the same
+ * visible to a reviewer. Real pipeline outcomes can be added through the same
  * queue service/API without changing the UI.
  */
 @Component
 @Profile("dev")
 public class ExceptionsDemoData {
-    private static final Logger log = LoggerFactory.getLogger(ExceptionsDemoData.class);
     private final ExceptionsQueueService service;
 
     public ExceptionsDemoData(ExceptionsQueueService service) {
@@ -51,25 +44,5 @@ public class ExceptionsDemoData {
                 "The proposal has broad community agreement.",
                 "Evidence contains conflicting statements: some participants support the proposal while others object to its scale and traffic impacts.",
                 0.61, "community_transcript_11.txt"));
-
-        seedFromPipelineDemo();
-    }
-
-    /**
-     * Feeds the standalone demo pipeline (synthetic data, mock coder only) into the queue so
-     * real pipeline outcomes appear alongside the static examples. Never runs against the live API.
-     */
-    private void seedFromPipelineDemo() {
-        try {
-            PipelineService pipeline = new PipelineService();
-            if (!pipeline.isMockMode()) return;
-            PipelineService.PipelineRun run = pipeline.runPipeline(
-                    PipelineService.demoItems(),
-                    Deidentify.loadTermListFromClasspath("communityGazetteer.txt"),
-                    Deidentify.loadTermListFromClasspath("vernacularTerms.txt"));
-            service.addFromPipelineRun(run);
-        } catch (Exception e) {
-            log.warn("Skipping pipeline demo seed: {}", e.getMessage());
-        }
     }
 }
