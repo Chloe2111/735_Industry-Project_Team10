@@ -73,7 +73,8 @@ public class DefaultPipelineRunner implements PipelineRunner {
         // An unexpected stage must not accidentally permit publication.
         for (var outcome : matching) {
             if (!"clean".equals(outcome.stageReached())
-                    && !"exceptions_queue".equals(outcome.stageReached())) {
+                    && !"exceptions_queue".equals(outcome.stageReached())
+                    && !"no_findings".equals(outcome.stageReached())) {
                 throw new IllegalStateException("Unexpected pipeline outcome stage");
             }
             if ("clean".equals(outcome.stageReached())
@@ -87,6 +88,12 @@ public class DefaultPipelineRunner implements PipelineRunner {
                 .toList();
 
         if (flagged.isEmpty()) {
+            // No findings alone must not be treated as a publishable result.
+            if (matching.stream().anyMatch(outcome ->
+                    "no_findings".equals(outcome.stageReached()))) {
+                throw new IllegalStateException(
+                        "The pipeline returned no findings without a review outcome");
+            }
             return matching.get(0);
         }
 

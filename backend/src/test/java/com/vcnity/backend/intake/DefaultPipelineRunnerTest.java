@@ -158,4 +158,76 @@ class DefaultPipelineRunnerTest {
         ));
         assertThrows(IllegalStateException.class, () -> runner.run("S1", 1, TEXT));
     }
+
+    @Test
+    void noFindingsAndCoverageFlagRequireReviewInEitherOrder()
+            throws Exception {
+        for (boolean flagFirst : List.of(false, true)) {
+            var runner = runner(id -> {
+                var empty = new PipelineService.PipelineOutcome(
+                        id, "no_findings", null, null, null, null, 0);
+                var coverage = new PipelineService.PipelineOutcome(
+                        id, "exceptions_queue", "REPRESENTATION_GAP",
+                        null, null, null, 0);
+                return flagFirst
+                        ? List.of(coverage, empty)
+                        : List.of(empty, coverage);
+            });
+
+            var result = runner.run("S1", 1, TEXT);
+
+            assertEquals("exceptions_queue", result.stageReached());
+            assertEquals("REPRESENTATION_GAP", result.reason());
+            assertNull(result.theme());
+            assertNull(result.quote());
+            assertNull(result.confidence());
+        }
+    }
+
+    @Test
+    void noFindingsFirstAndCoverageFlagSecondReachesHumanReview()
+            throws Exception {
+        var runner = runner(id -> List.of(
+                new PipelineService.PipelineOutcome(
+                        id, "no_findings", null, null, null, null, 0),
+                new PipelineService.PipelineOutcome(
+                        id, "exceptions_queue", "REPRESENTATION_GAP",
+                        null, null, null, 0)
+        ));
+        var queue = new ExceptionsQueueService();
+        var intake = intake(runner, queue);
+
+        var receipt = intake.submit(
+                new SubmissionRequest(List.of(GROUP), TEXT));
+
+        assertEquals(SubmissionStatus.PENDING_REVIEW, receipt.status());
+        assertTrue(intake.listPublished(GROUP).isEmpty());
+        var items = queue.listBySource(
+                IntakeService.SOURCE_TYPE, receipt.id());
+        assertEquals(1, items.size());
+        assertEquals(FlagType.REPRESENTATION_GAP, items.get(0).getFlagType());
+        assertEquals(ReviewStatus.PENDING, items.get(0).getStatus());
+    }
+
+    @Test
+    void noFindingsWithoutReviewStillFailsClosed() throws Exception {
+        var runner = runner(id -> List.of(
+                new PipelineService.PipelineOutcome(
+                        id, "no_findings", null, null, null, null, 0)
+        ));
+
+        assertThrows(IllegalStateException.class,
+                () -> runner.run("S1", 1, TEXT));
+    }
+
+    @Test
+    void codingFailureIsNotHiddenByCoverageFlag() throws Exception {
+        var runner = runner(id -> List.of(
+                outcome(id, "coding_failed", "CODING_FAILED"),
+                outcome(id, "exceptions_queue", "REPRESENTATION_GAP")
+        ));
+
+        assertThrows(IllegalStateException.class,
+                () -> runner.run("S1", 1, TEXT));
+    }
 }
