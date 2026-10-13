@@ -1,50 +1,38 @@
-import { useState } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ToastProvider } from './components/Toast/ToastProvider'
+import { PortalLayout } from './components/Layout/PortalLayout'
+import { DashboardPage } from './pages/DashboardPage'
+import { PostCommissionPage } from './pages/PostCommissionPage'
+import { MyCommissionsPage } from './pages/MyCommissionsPage'
+import { ReportsReceivedPage } from './pages/ReportsReceivedPage'
+import { ReportDetailPage } from './pages/ReportDetailPage'
+import { MyAccountPage } from './pages/MyAccountPage'
+import { ExceptionsQueuePage } from './pages/ExceptionsQueuePage'
+import { CodingFindingsPage } from './pages/CodingFindingsPage'
 import CommunityWorkspace from './components/Community/CommunityWorkspace'
-import ExceptionsQueue from './components/Exceptions/ExceptionsQueue'
-import CommunitySubmissionPage from './pages/CommunitySubmissionPage'
-import { getSubmission, publishSubmission } from './services/intakeApi'
-
-// No router yet: a simple switch keeps Story 17, Story 24 and Story 19 all reachable.
-// Replace this with the team's shared navigation when it exists.
-const VIEWS = [
-  { id: 'workspace', label: 'Community workspace' },
-  { id: 'submit', label: 'Share feedback' },
-  { id: 'exceptions', label: 'Exceptions queue' },
-]
-
-// Gives the review screen the two things it needs to publish a community submission.
-// Clearing a flag never publishes; publishing is this separate, explicit action.
-const COMMUNITY_SUBMISSIONS = { getStatus: getSubmission, publish: publishSubmission }
 
 export default function App() {
-  const [view, setView] = useState('workspace')
-
   return (
     <ToastProvider>
-      <nav className="app-nav" aria-label="Main">
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            className="app-nav__tab"
-            aria-current={view === v.id ? 'page' : undefined}
-            onClick={() => setView(v.id)}
-          >
-            {v.label}
-          </button>
-        ))}
-      </nav>
-      {/* Story 17: the community workspace stays mounted so its state survives switching tabs. */}
-      <div hidden={view !== 'workspace'}>
-        <CommunityWorkspace />
-      </div>
-      {/* Story 24: the submission page stays mounted so a receipt is still there after a visit to the queue. */}
-      <div hidden={view !== 'submit'}>
-        <CommunitySubmissionPage />
-      </div>
-      {/* Story 19: the queue is mounted on each visit so it always loads the latest items. */}
-      {view === 'exceptions' && <ExceptionsQueue communitySubmissions={COMMUNITY_SUBMISSIONS} />}
+      <BrowserRouter>
+        <Routes>
+          <Route element={<PortalLayout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="post-commission" element={<PostCommissionPage />} />
+            <Route path="my-commissions" element={<MyCommissionsPage />} />
+            <Route path="reports-received" element={<ReportsReceivedPage />} />
+            <Route path="reports-received/:reportId" element={<ReportDetailPage />} />
+            <Route path="exceptions-queue" element={<ExceptionsQueuePage />} />
+            <Route path="coding-findings" element={<CodingFindingsPage />} />
+            <Route path="account" element={<MyAccountPage />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Route>
+          {/* Community workspace manages its own header/navigation (Story 17), so it sits
+              outside the client portal's PortalLayout shell rather than inside it. */}
+          <Route path="community" element={<CommunityWorkspace />} />
+        </Routes>
+      </BrowserRouter>
     </ToastProvider>
   )
 }
