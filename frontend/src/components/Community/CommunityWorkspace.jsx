@@ -14,6 +14,8 @@ import OpenCommissions from "./Commissions/OpenCommissions";
 import CommissionDetails from "./Commissions/CommissionDetails";
 import SubmitIdea from "./Commissions/SubmitIdea";
 import SubmissionSuccess from "./Commissions/SubmissionSuccess";
+import CommunityHeader from "./CommunityHeader";
+import CommunitySubmissionPage from "../../pages/CommunitySubmissionPage";
 
 // Temporary identity adapter until the team's shared authentication provider is connected.
 // Keeping it here makes replacing it with the authenticated user a single change.
@@ -124,6 +126,14 @@ export default function CommunityWorkspace() {
     case "details": return <CommissionDetails {...common} />;
     case "submit": return <SubmitIdea {...common} />;
     case "success": return <SubmissionSuccess {...common} />;
+    // Story 24 share-feedback form, shown under the community nav so members can get back.
+    case "shareFeedback":
+      return (
+        <div className="community-page">
+          <CommunityHeader active="shareFeedback" onNavigate={navigateTo} />
+          <CommunitySubmissionPage />
+        </div>
+      );
     default: return <Dashboard {...common} groups={groups} posts={posts} loading={loading} />;
   }
 }

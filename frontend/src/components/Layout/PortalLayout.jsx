@@ -37,6 +37,7 @@ export function PortalLayout() {
         <div className="portal-topnav__brand">
           <span className="portal-topnav__logo">vcnity</span>
           <span className="portal-topnav__pill">Client Portal</span>
+          <NavLink to="/community" className="portal-topnav__switch">Community portal →</NavLink>
         </div>
         <nav className="portal-topnav__links">
           {NAV_LINKS.map((link) => (
