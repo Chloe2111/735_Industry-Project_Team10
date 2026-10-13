@@ -1,18 +1,10 @@
-export function ExceptionsQueuePage() {
-  return (
-    <div className="exceptions-queue-page">
-      <h1>Exceptions queue</h1>
-      <p className="exceptions-queue-page__subtitle">
-        AI review flags waiting on a human decision before a report can be released.
-      </p>
+import ExceptionsQueue from '../components/Exceptions/ExceptionsQueue'
+import { getSubmission, publishSubmission } from '../services/intakeApi'
 
-      <div className="page-card page-card--wide">
-        <p>
-          Reserved for the Story 19 exceptions queue (Clear / Reject flagged content). This page will host the real
-          component once that work is merged in — swap this placeholder for <code>ExceptionsQueue</code> at that
-          point without touching routing or navigation elsewhere.
-        </p>
-      </div>
-    </div>
-  )
+// Gives the review screen the two things it needs to publish a community submission.
+// Clearing a flag never publishes; publishing is this separate, explicit action.
+const COMMUNITY_SUBMISSIONS = { getStatus: getSubmission, publish: publishSubmission }
+
+export function ExceptionsQueuePage() {
+  return <ExceptionsQueue communitySubmissions={COMMUNITY_SUBMISSIONS} />
 }

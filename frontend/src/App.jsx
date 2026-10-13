@@ -9,6 +9,7 @@ import { ReportDetailPage } from './pages/ReportDetailPage'
 import { MyAccountPage } from './pages/MyAccountPage'
 import { ExceptionsQueuePage } from './pages/ExceptionsQueuePage'
 import { CodingFindingsPage } from './pages/CodingFindingsPage'
+import CommunityWorkspace from './components/Community/CommunityWorkspace'
 
 export default function App() {
   return (
@@ -27,6 +28,9 @@ export default function App() {
             <Route path="account" element={<MyAccountPage />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
+          {/* Community workspace manages its own header/navigation (Story 17), so it sits
+              outside the client portal's PortalLayout shell rather than inside it. */}
+          <Route path="community" element={<CommunityWorkspace />} />
         </Routes>
       </BrowserRouter>
     </ToastProvider>

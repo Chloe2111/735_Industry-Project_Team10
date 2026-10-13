@@ -1,0 +1,34 @@
+# community_gazetteer.txt
+#
+# ============================================================
+# DO NOT USE THESE PLACEHOLDER ENTRIES IN A REAL PILOT OR
+# PRODUCTION RUN.
+# ============================================================
+#
+# This file must be built WITH the community whose material this
+# pipeline processes - not invented by the research/dev team. Per the
+# project's own governance design, authority over what counts as
+# identifying or restricted information about a community sits with
+# that community, not with researchers.
+#
+# What belongs in this file, once reviewed and approved by the
+# community/VCNITY contact:
+#   - Personal names commonly used within the community that a
+#     generic English NER model would not recognise
+#   - Kinship terms that function as identifying references when
+#     paired with a name or context (e.g. specific relationship terms
+#     used in place of a name)
+#   - Local place names (town names, site names, meeting places) that
+#     could identify a participant or location when combined with
+#     other details
+#   - Any other locally-specific term the community identifies as
+#     something a de-identification pass must catch
+#
+# Format: one term per line, case-insensitive, matched on whole words.
+# Lines starting with # are ignored.
+#
+# --- placeholder examples below, for testing the CODE only ---
+# --- replace entirely before any real data touches this pipeline ---
+
+Riverbend Community Hall
+Wattle Creek

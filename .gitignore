@@ -31,3 +31,5 @@ application-local.properties
 frontend/node_modules/
 frontend/dist/
 frontend/coverage/
+node_modules/
+dist/
