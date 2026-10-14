@@ -114,3 +114,107 @@ describe('findingsService.listFindings (Story 23.2)', () => {
     await expect(listFindings()).rejects.toThrow('Unable to reach the server.')
   })
 })
+
+
+describe('findingsService response validation', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  function sourceResponse(response) {
+    apiClient.get = vi.fn(async (path) => {
+      if (path === '/intake/group-tiers') return [{ groupId: 'group-a' }]
+      if (path.startsWith('/intake/submissions')) return [{ id: 'sub-1' }]
+      if (path.startsWith('/findings')) return response
+      throw new Error(`unexpected path ${path}`)
+    })
+  }
+
+  it.each([null, {}, [{ groupId: '' }], [{}]])(
+    'rejects an invalid group list: %j',
+    async (response) => {
+      apiClient.get = vi.fn().mockResolvedValue(response)
+
+      await expect(listFindings()).rejects.toThrow('invalid group list')
+      expect(apiClient.get).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it.each([null, {}, [{ id: '' }], [{}]])(
+    'rejects an invalid published-submissions list: %j',
+    async (response) => {
+      apiClient.get = vi.fn(async (path) => {
+        if (path === '/intake/group-tiers') return [{ groupId: 'group-a' }]
+        if (path.startsWith('/intake/submissions')) return response
+        throw new Error(`unexpected path ${path}`)
+      })
+
+      await expect(listFindings()).rejects.toThrow('invalid published-submissions list')
+    },
+  )
+
+  it.each([
+    null,
+    {},
+    { findings: null, hasNext: false },
+    { findings: [], hasNext: 'false' },
+    { findings: [] },
+  ])('rejects an invalid findings page: %j', async (response) => {
+    sourceResponse(response)
+
+    await expect(listFindings()).rejects.toThrow('invalid findings response')
+  })
+
+  it('accepts a valid empty findings page', async () => {
+    sourceResponse({ findings: [], hasNext: false })
+
+    await expect(listFindings()).resolves.toEqual({ data: [] })
+  })
+
+  it('rejects incomplete results when the pagination limit is reached', async () => {
+    sourceResponse({ findings: [finding('f1', 'sub-1')], hasNext: true })
+
+    await expect(listFindings()).rejects.toThrow('page limit was reached')
+
+    const calls = apiClient.get.mock.calls.filter(
+      ([path]) => path.startsWith('/findings'),
+    )
+    expect(calls).toHaveLength(20)
+  })
+
+  it('accepts a complete result ending on the final allowed page', async () => {
+    apiClient.get = vi.fn(async (path) => {
+      if (path === '/intake/group-tiers') return [{ groupId: 'group-a' }]
+      if (path.startsWith('/intake/submissions')) return [{ id: 'sub-1' }]
+      if (path.startsWith('/findings')) {
+        const page = Number(new URLSearchParams(path.split('?')[1]).get('page'))
+        return {
+          findings: [finding(`f${page}`, 'sub-1')],
+          hasNext: page < 19,
+        }
+      }
+      throw new Error(`unexpected path ${path}`)
+    })
+
+    const result = await listFindings()
+    expect(result.data).toHaveLength(20)
+    expect(result.data[19].itemId).toBe('f19')
+  })
+
+  it('rejects instead of returning partial results when a later page fails', async () => {
+    apiClient.get = vi.fn(async (path) => {
+      if (path === '/intake/group-tiers') return [{ groupId: 'group-a' }]
+      if (path.startsWith('/intake/submissions')) return [{ id: 'sub-1' }]
+      if (path.startsWith('/findings')) {
+        const page = Number(new URLSearchParams(path.split('?')[1]).get('page'))
+        if (page === 0) {
+          return { findings: [finding('f1', 'sub-1')], hasNext: true }
+        }
+        throw new Error('Findings are temporarily unavailable.')
+      }
+      throw new Error(`unexpected path ${path}`)
+    })
+
+    await expect(listFindings()).rejects.toThrow(
+      'Findings are temporarily unavailable.',
+    )
+  })
+})
