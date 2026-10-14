@@ -32,3 +32,13 @@ a.my-commissions-page__project-link:hover {
   font-size: 0.78rem;
   color: var(--color-text-muted);
 }
+
+.my-commissions-page__draft-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.my-commissions-page__delete-draft {
+  color: var(--color-danger, #b42318);
+}

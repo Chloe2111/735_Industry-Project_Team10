@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   ageGroupOptions,
   communityVoiceOptions,
@@ -9,7 +9,7 @@ import {
   reportFormatOptions,
   topicAreaOptions,
 } from '../data/portalSeed'
-import { createCommission, suggestGroups } from '../services/portalService'
+import { createCommission, deleteDraft, getDraft, saveDraft, suggestGroups } from '../services/portalService'
 import { useToast } from '../components/Toast/ToastProvider'
 import { PillOptions } from '../components/PillOptions/PillOptions'
 import './PostCommissionPage.css'
@@ -57,8 +57,12 @@ function matchBadgeClass(percent) {
   return 'post-commission-page__match post-commission-page__match--low'
 }
 
+const STEPS = new Set(['details', 'questionnaire', 'groups'])
+
 export function PostCommissionPage() {
   const toast = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const draftParam = searchParams.get('draft')
 
   const [step, setStep] = useState('details')
   const [form, setForm] = useState(INITIAL_FORM)
@@ -71,6 +75,33 @@ export function PostCommissionPage() {
   const [groupSearch, setGroupSearch] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [posted, setPosted] = useState(false)
+  const [draftId, setDraftId] = useState(null)
+  const [savingDraft, setSavingDraft] = useState(false)
+
+  // Opening /post-commission?draft=<id> (from My commissions -> Drafts) restores that draft.
+  useEffect(() => {
+    if (!draftParam || draftParam === draftId) return
+    let cancelled = false
+    getDraft(draftParam).then(({ data: draft }) => {
+      if (cancelled) return
+      if (!draft) {
+        toast.error('That draft could not be found. It may have been posted or deleted.')
+        return
+      }
+      const groups = Array.isArray(draft.suggestedGroups) ? draft.suggestedGroups : []
+      setForm({ ...INITIAL_FORM, ...draft.form })
+      setAnswers({ ...INITIAL_ANSWERS, ...draft.answers })
+      setSuggestedGroups(groups)
+      setSelectedGroupIds(new Set(draft.selectedGroupIds ?? []))
+      const savedStep = STEPS.has(draft.step) ? draft.step : 'details'
+      setStep(savedStep === 'groups' && groups.length === 0 ? 'questionnaire' : savedStep)
+      setErrors({})
+      setDraftId(draft.id)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [draftParam, draftId, toast])
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }))
@@ -82,8 +113,23 @@ export function PostCommissionPage() {
     })
   }
 
-  function handleSaveDraft() {
-    toast.success('Draft saved.')
+  async function handleSaveDraft() {
+    setSavingDraft(true)
+    try {
+      const { data: saved } = await saveDraft({
+        id: draftId ?? undefined,
+        form,
+        answers,
+        suggestedGroups,
+        selectedGroupIds: [...selectedGroupIds],
+        step,
+      })
+      setDraftId(saved.id)
+      setSearchParams({ draft: saved.id }, { replace: true })
+      toast.success('Draft saved. You can continue it from My commissions › Drafts.')
+    } finally {
+      setSavingDraft(false)
+    }
   }
 
   function handleNextFromDetails(event) {
@@ -154,6 +200,11 @@ export function PostCommissionPage() {
         reportFormats: form.reportFormats,
         groups: suggestedGroups.filter((group) => selectedGroupIds.has(group.id)).map((group) => group.name),
       })
+      if (draftId) {
+        await deleteDraft(draftId)
+        setDraftId(null)
+        setSearchParams({}, { replace: true })
+      }
       setPosted(true)
     } catch (error) {
       const fieldErrors = error.fieldErrors || {}
@@ -188,6 +239,8 @@ export function PostCommissionPage() {
     setGroupSearch('')
     setStep('details')
     setPosted(false)
+    setDraftId(null)
+    setSearchParams({}, { replace: true })
   }
 
   if (posted) {
@@ -345,7 +398,7 @@ export function PostCommissionPage() {
           <div className="post-commission-page__actions post-commission-page__actions--split">
             <span className="post-commission-page__selected-count">{selectedGroupIds.size} groups selected</span>
             <div className="post-commission-page__actions-buttons">
-              <button type="button" className="btn btn--secondary" onClick={handleSaveDraft}>
+              <button type="button" className="btn btn--secondary" onClick={handleSaveDraft} disabled={savingDraft}>
                 Save as draft
               </button>
               <button
@@ -454,7 +507,7 @@ export function PostCommissionPage() {
           </div>
 
           <div className="post-commission-page__actions">
-            <button type="button" className="btn btn--secondary" onClick={handleSaveDraft}>
+            <button type="button" className="btn btn--secondary" onClick={handleSaveDraft} disabled={savingDraft}>
               Save as draft
             </button>
             <button type="submit" className="btn btn--primary">
