@@ -1,46 +1,69 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { RoleSwitcher } from '../RoleSwitcher/RoleSwitcher'
 import { NotificationBell } from '../Notifications/NotificationBell'
 import './PortalLayout.css'
 
-const NAV_LINKS = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/post-commission', label: 'Post a commission' },
-  { to: '/my-commissions', label: 'My commissions' },
-  { to: '/reports-received', label: 'Reports received' },
-  { to: '/exceptions-queue', label: 'Exceptions queue' },
-  { to: '/coding-findings', label: 'Coding findings' },
-]
+// One shell, two portals. The facilitator portal is a first draft that reuses
+// the client portal's design; it will be redesigned next semester.
+const PORTALS = {
+  client: {
+    pill: 'Client Portal',
+    breadcrumbRoot: 'Council Portal',
+    links: [
+      { to: '/dashboard', label: 'Dashboard' },
+      { to: '/post-commission', label: 'Post a commission' },
+      { to: '/my-commissions', label: 'My commissions' },
+      { to: '/reports-received', label: 'Reports received' },
+    ],
+    breadcrumbs: [
+      { test: (path) => path === '/dashboard', label: 'Dashboard' },
+      { test: (path) => path === '/post-commission', label: 'Post a commission' },
+      { test: (path) => path === '/my-commissions', label: 'My commissions' },
+      { test: (path) => path === '/reports-received', label: 'Reports Received' },
+      { test: (path) => path === '/account', label: 'My account' },
+      { test: (path) => path.startsWith('/reports-received/'), label: null },
+    ],
+    account: { to: '/account', initials: 'JM', name: '[Council 1]' },
+    notifications: true,
+  },
+  // The human gate in the AI analysis pipeline: review flagged items, then
+  // check the coded findings before anything reaches a client.
+  facilitator: {
+    pill: 'Facilitator Portal',
+    breadcrumbRoot: 'Facilitator Portal',
+    links: [
+      { to: '/facilitator/exceptions-queue', label: 'Exceptions queue' },
+      { to: '/facilitator/coding-findings', label: 'Coding findings' },
+    ],
+    breadcrumbs: [
+      { test: (path) => path === '/facilitator/exceptions-queue', label: 'Exceptions Queue' },
+      { test: (path) => path === '/facilitator/coding-findings', label: 'Coding Findings' },
+    ],
+    account: { initials: 'FA', name: '[Facilitator]' },
+    notifications: false,
+  },
+}
 
-const BREADCRUMB_LABELS = [
-  { test: (path) => path === '/dashboard', label: 'Dashboard' },
-  { test: (path) => path === '/post-commission', label: 'Post a commission' },
-  { test: (path) => path === '/my-commissions', label: 'My commissions' },
-  { test: (path) => path === '/reports-received', label: 'Reports Received' },
-  { test: (path) => path === '/exceptions-queue', label: 'Exceptions Queue' },
-  { test: (path) => path === '/coding-findings', label: 'Coding Findings' },
-  { test: (path) => path === '/account', label: 'My account' },
-  { test: (path) => path.startsWith('/reports-received/'), label: null },
-]
-
-function useBreadcrumbLabel() {
+function useBreadcrumbLabel(breadcrumbs) {
   const { pathname } = useLocation()
-  const match = BREADCRUMB_LABELS.find((entry) => entry.test(pathname))
+  const match = breadcrumbs.find((entry) => entry.test(pathname))
   return match ? match.label : null
 }
 
-export function PortalLayout() {
-  const breadcrumbLabel = useBreadcrumbLabel()
+export function PortalLayout({ role = 'client' }) {
+  const portal = PORTALS[role] ?? PORTALS.client
+  const breadcrumbLabel = useBreadcrumbLabel(portal.breadcrumbs)
+  const navigate = useNavigate()
 
   return (
     <div className="portal">
       <header className="portal-topnav">
         <div className="portal-topnav__brand">
           <span className="portal-topnav__logo">vcnity</span>
-          <span className="portal-topnav__pill">Client Portal</span>
-          <NavLink to="/community" className="portal-topnav__switch">Community portal →</NavLink>
+          <span className="portal-topnav__pill">{portal.pill}</span>
         </div>
         <nav className="portal-topnav__links">
-          {NAV_LINKS.map((link) => (
+          {portal.links.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
@@ -52,15 +75,23 @@ export function PortalLayout() {
             </NavLink>
           ))}
         </nav>
-        <NavLink to="/account" className="portal-topnav__account">
-          <span className="portal-topnav__avatar">JM</span>
-          <span className="portal-topnav__org">[Council 1]</span>
-        </NavLink>
+        <RoleSwitcher current={role} onSwitch={(path) => navigate(path)} className="portal-topnav__roles" />
+        {portal.account.to ? (
+          <NavLink to={portal.account.to} className="portal-topnav__account">
+            <span className="portal-topnav__avatar">{portal.account.initials}</span>
+            <span className="portal-topnav__org">{portal.account.name}</span>
+          </NavLink>
+        ) : (
+          <span className="portal-topnav__account">
+            <span className="portal-topnav__avatar">{portal.account.initials}</span>
+            <span className="portal-topnav__org">{portal.account.name}</span>
+          </span>
+        )}
       </header>
 
       {breadcrumbLabel && (
         <div className="portal-breadcrumbs">
-          <span>Council Portal</span>
+          <span>{portal.breadcrumbRoot}</span>
           <span className="portal-breadcrumbs__sep">&rsaquo;</span>
           <span className="portal-breadcrumbs__current">{breadcrumbLabel}</span>
         </div>
@@ -70,7 +101,7 @@ export function PortalLayout() {
         <Outlet />
       </main>
 
-      <NotificationBell />
+      {portal.notifications && <NotificationBell />}
     </div>
   )
 }
