@@ -23,7 +23,7 @@ describe('CreateGroup', () => {
     renderPage({ onCreateGroup, onNavigate })
     await userEvent.type(screen.getByPlaceholderText('Enter a group name'), 'Local Group')
     await userEvent.type(screen.getByPlaceholderText('What is this group about?'), 'Local projects')
-    await userEvent.selectOptions(screen.getByRole('combobox'), 'Community')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Category/ }), 'Community')
     await userEvent.click(screen.getByRole('button', { name: 'Create Group' }))
     expect(onCreateGroup).toHaveBeenCalledWith(expect.objectContaining({ name: 'Local Group', category: 'Community' }))
     expect(onNavigate).toHaveBeenCalledWith('groups')

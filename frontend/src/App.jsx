@@ -16,17 +16,25 @@ export default function App() {
     <ToastProvider>
       <BrowserRouter>
         <Routes>
-          <Route element={<PortalLayout />}>
+          <Route element={<PortalLayout role="client" />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="post-commission" element={<PostCommissionPage />} />
             <Route path="my-commissions" element={<MyCommissionsPage />} />
             <Route path="reports-received" element={<ReportsReceivedPage />} />
             <Route path="reports-received/:reportId" element={<ReportDetailPage />} />
-            <Route path="exceptions-queue" element={<ExceptionsQueuePage />} />
-            <Route path="coding-findings" element={<CodingFindingsPage />} />
+            {/* Moved to the facilitator portal; old links still land in the right place. */}
+            <Route path="exceptions-queue" element={<Navigate to="/facilitator/exceptions-queue" replace />} />
+            <Route path="coding-findings" element={<Navigate to="/facilitator/coding-findings" replace />} />
             <Route path="account" element={<MyAccountPage />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Route>
+          {/* Facilitator portal: the human gate in the AI analysis pipeline (first draft). */}
+          <Route path="facilitator" element={<PortalLayout role="facilitator" />}>
+            <Route index element={<Navigate to="exceptions-queue" replace />} />
+            <Route path="exceptions-queue" element={<ExceptionsQueuePage />} />
+            <Route path="coding-findings" element={<CodingFindingsPage />} />
+            <Route path="*" element={<Navigate to="exceptions-queue" replace />} />
           </Route>
           {/* Community workspace manages its own header/navigation (Story 17), so it sits
               outside the client portal's PortalLayout shell rather than inside it. */}

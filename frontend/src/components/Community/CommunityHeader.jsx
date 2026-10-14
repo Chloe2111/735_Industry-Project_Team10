@@ -1,10 +1,11 @@
 import "./CommunityWorkspace.css";
+import { RoleSwitcher } from "../RoleSwitcher/RoleSwitcher";
 
 export default function CommunityHeader({ active = "", onNavigate }) {
   const go = (page) => onNavigate?.(page);
   return (
     <>
-      <div className="portal-topbar"><a href="/dashboard">Client Portal</a><span>•</span><strong>Community Portal</strong></div>
+      <div className="portal-topbar"><strong>Community Portal</strong><span>•</span><RoleSwitcher current="community" className="role-switcher--on-dark" /></div>
       <nav className="portal-nav">
         <div className="brand-area"><span className="vcnity-logo">vcnity</span><span className="community-pill">Community</span></div>
         <div className="nav-links">
