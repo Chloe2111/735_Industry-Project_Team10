@@ -18,15 +18,23 @@ async function listFindingsForSource(sourceRef, options) {
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const query = new URLSearchParams({ sourceRef, page: String(page), size: String(PAGE_SIZE) })
     const result = await apiClient.get(`/findings?${query}`, options)
-    findings.push(...(Array.isArray(result?.findings) ? result.findings : []))
-    if (!result?.hasNext) break
+    if (!Array.isArray(result?.findings) || typeof result?.hasNext !== 'boolean') {
+      throw new Error('The server returned an invalid findings response. Please try again.')
+    }
+    findings.push(...result.findings)
+    if (!result.hasNext) return findings
   }
-  return findings
+  throw new Error('Could not load all coded findings because the page limit was reached.')
 }
 
 async function listPublishedSubmissionIds(options) {
   const groups = await apiClient.get('/intake/group-tiers', options)
-  const groupIds = (Array.isArray(groups) ? groups : []).map((group) => group?.groupId).filter(Boolean)
+  if (!Array.isArray(groups) || groups.some(
+    (group) => typeof group?.groupId !== 'string' || !group.groupId.trim(),
+  )) {
+    throw new Error('The server returned an invalid group list. Please try again.')
+  }
+  const groupIds = [...new Set(groups.map((group) => group.groupId))]
 
   const perGroup = await Promise.all(
     groupIds.map((groupId) =>
@@ -34,10 +42,14 @@ async function listPublishedSubmissionIds(options) {
     ),
   )
 
-  const ids = perGroup
-    .flatMap((submissions) => (Array.isArray(submissions) ? submissions : []))
-    .map((submission) => submission?.id)
-    .filter(Boolean)
+  if (perGroup.some((submissions) =>
+    !Array.isArray(submissions) || submissions.some(
+      (submission) => typeof submission?.id !== 'string' || !submission.id.trim(),
+    ),
+  )) {
+    throw new Error('The server returned an invalid published-submissions list. Please try again.')
+  }
+  const ids = perGroup.flat().map((submission) => submission.id)
   return [...new Set(ids)]
 }
 
