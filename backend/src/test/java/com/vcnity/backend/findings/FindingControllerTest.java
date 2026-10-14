@@ -118,7 +118,9 @@ class FindingControllerTest {
     @Test
     void missingSourceReferenceReturns400() throws Exception {
         mvc.perform(get("/api/findings"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(content().json("{\"code\":\"INVALID_FINDING_REQUEST\",\"message\":\"Invalid findings request. Provide a sourceRef, a page of 0 or greater, and a size between 1 and 100.\"}", true));
 
         verifyNoInteractions(repository);
     }
@@ -128,7 +130,9 @@ class FindingControllerTest {
         mvc.perform(get("/api/findings")
                         .param("sourceRef", "synthetic_source")
                         .param("page", "abc"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(content().json("{\"code\":\"INVALID_FINDING_REQUEST\",\"message\":\"Invalid findings request. Provide a sourceRef, a page of 0 or greater, and a size between 1 and 100.\"}", true));
 
         verifyNoInteractions(repository);
     }
@@ -145,7 +149,7 @@ class FindingControllerTest {
                         .param("page", "-1"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().json(
-                        "{\"code\":\"INVALID_FINDING_REQUEST\"}"
+                        "{\"code\":\"INVALID_FINDING_REQUEST\",\"message\":\"Invalid findings request. Provide a sourceRef, a page of 0 or greater, and a size between 1 and 100.\"}", true
                 ));
     }
 
@@ -160,7 +164,7 @@ class FindingControllerTest {
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(content().json(
-                        "{\"code\":\"FINDING_STORAGE_UNAVAILABLE\"}"
+                        "{\"code\":\"FINDING_STORAGE_UNAVAILABLE\",\"message\":\"Findings are temporarily unavailable. Please try again later.\"}", true
                 ));
     }
 
@@ -174,7 +178,7 @@ class FindingControllerTest {
         mvc.perform(get("/api/findings/synthetic_finding_001"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(content().json(
-                        "{\"code\":\"FINDING_STORAGE_ERROR\"}"
+                        "{\"code\":\"FINDING_STORAGE_ERROR\",\"message\":\"Could not load coded findings. Please try again later.\"}", true
                 ));
     }
 }

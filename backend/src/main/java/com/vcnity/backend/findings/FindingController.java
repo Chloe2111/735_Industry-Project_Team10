@@ -8,6 +8,8 @@ import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -64,9 +66,13 @@ public class FindingController {
                 .body(result);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
+    @ExceptionHandler({
+            IllegalArgumentException.class,
+            MissingServletRequestParameterException.class,
+            MethodArgumentTypeMismatchException.class
+    })
     public ResponseEntity<ApiError> invalidRequest(
-            IllegalArgumentException exception
+            Exception exception
     ) {
         return error(
                 HttpStatus.BAD_REQUEST,
@@ -103,9 +109,22 @@ public class FindingController {
     ) {
         return ResponseEntity.status(status)
                 .cacheControl(CacheControl.noStore())
-                .body(new ApiError(code));
+                .body(new ApiError(code, messageFor(code)));
     }
 
-    public record ApiError(String code) {
+    private static String messageFor(String code) {
+        return switch (code) {
+            case "INVALID_FINDING_REQUEST" ->
+                    "Invalid findings request. Provide a sourceRef, a page of 0 or greater, and a size between 1 and 100.";
+            case "FINDING_STORAGE_UNAVAILABLE" ->
+                    "Findings are temporarily unavailable. Please try again later.";
+            case "FINDING_STORAGE_ERROR" ->
+                    "Could not load coded findings. Please try again later.";
+            default ->
+                    "Could not complete the findings request. Please try again later.";
+        };
+    }
+
+    public record ApiError(String code, String message) {
     }
 }
