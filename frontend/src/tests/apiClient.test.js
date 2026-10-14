@@ -39,6 +39,25 @@ describe('apiClient', () => {
     })
   })
 
+  it('explains a 5xx with no message as a server problem (e.g. backend or MongoDB down)', async () => {
+    // What the Vite dev proxy returns when nothing is listening on :8080.
+    mockFetchOnce({ ok: false, status: 500, body: undefined, contentType: 'text/plain' })
+
+    await expect(apiClient.post('/commissions', {})).rejects.toMatchObject({
+      status: 500,
+      message: 'The server could not complete this request. Please try again shortly. (error 500)',
+    })
+  })
+
+  it('keeps the generic message for a 4xx with no message', async () => {
+    mockFetchOnce({ ok: false, status: 404, body: {} })
+
+    await expect(apiClient.get('/nowhere')).rejects.toMatchObject({
+      status: 404,
+      message: 'Something went wrong. Please try again.',
+    })
+  })
+
   it('wraps a transport failure as a network ApiError', async () => {
     global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
 
