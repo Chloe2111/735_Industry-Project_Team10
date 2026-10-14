@@ -12,9 +12,33 @@ import { apiClient, ApiError } from './apiClient'
 // listing/dashboard endpoints yet (createCommission/suggestGroups/reports
 // below are wired to real endpoints). Each function resolves `{ data }`
 // like apiClient so swapping the rest over later is a one-line change.
+// Commission drafts are kept in the browser (localStorage) so they survive a
+// page refresh. There is no drafts endpoint on the backend yet; when one
+// exists, only the four draft functions below need to change.
+const DRAFTS_KEY = 'vcnity.commissionDrafts'
+
+function loadDrafts() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? '[]')
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function persistDrafts() {
+  try {
+    window.localStorage.setItem(DRAFTS_KEY, JSON.stringify(state.drafts))
+  } catch {
+    // Storage can be unavailable (private mode, blocked site data); drafts
+    // then last until the page is closed, which is still better than nothing.
+  }
+}
+
 const state = {
   commissions: [...seedCommissions],
   notifications: seedNotifications.map((item) => ({ ...item })),
+  drafts: loadDrafts(),
 }
 
 const LATENCY_MS = 250
@@ -37,7 +61,46 @@ export function listCommissions() {
 // unlike the rest of this file, not backed by the in-memory mock store.
 export async function createCommission(payload) {
   const commission = await apiClient.post('/commissions', payload)
+  // listCommissions is still mock-backed, so add the new commission there too;
+  // otherwise it would never show up under My commissions.
+  if (commission?.id) {
+    state.commissions = [
+      {
+        id: commission.id,
+        title: commission.title ?? payload.title,
+        assignedGroup: commission.assignedGroup ?? null,
+        incentive: commission.incentive ?? payload.incentive,
+        tier: commission.tier ?? null,
+        status: commission.status ?? 'OPEN',
+      },
+      ...state.commissions.filter((item) => item.id !== commission.id),
+    ]
+  }
   return { data: commission }
+}
+
+export function listDrafts() {
+  const sorted = [...state.drafts].sort((a, b) => (b.savedAt ?? '').localeCompare(a.savedAt ?? ''))
+  return resolveAfterDelay(sorted)
+}
+
+export function getDraft(id) {
+  return resolveAfterDelay(state.drafts.find((draft) => draft.id === id) ?? null)
+}
+
+/** Creates a draft, or updates it when `draft.id` is set. */
+export function saveDraft(draft) {
+  const id = draft.id ?? `draft-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+  const saved = { ...draft, id, savedAt: new Date().toISOString() }
+  state.drafts = [saved, ...state.drafts.filter((item) => item.id !== id)]
+  persistDrafts()
+  return resolveAfterDelay(saved)
+}
+
+export function deleteDraft(id) {
+  state.drafts = state.drafts.filter((draft) => draft.id !== id)
+  persistDrafts()
+  return resolveAfterDelay(id)
 }
 
 // Stands in for a real AI group-matching endpoint, which doesn't exist yet
