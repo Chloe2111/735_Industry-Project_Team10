@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import "./CommunityWorkspace.css";
-import CommunityHeader, { ChatButton } from "./CommunityHeader";
+import CommunityHeader, { ChatButton, LoadErrorNotice } from "./CommunityHeader";
 
 export default function Groups({
   onNavigate,
   groups = [],
   memberships = [],
   loading = false,
+  loadError = null,
+  onRetry,
   membershipLoadingId = null,
   onJoinGroup,
   onLeaveGroup,
@@ -68,8 +70,7 @@ export default function Groups({
 
   return (
     <div className="community-page">
-      <CommunityHeader active="groups" onNavigate={onNavigate} />
-      <div className="breadcrumb">Community Portal › Groups</div>
+      <CommunityHeader active="groups" onNavigate={onNavigate} crumbs={["Groups"]} />
       <main className="standard-page">
         <div className="page-title-row">
           <div>
@@ -88,9 +89,10 @@ export default function Groups({
           </select>
         </div>
 
+        {loadError && <LoadErrorNotice message={loadError} onRetry={onRetry} />}
         {loading && <p>Loading groups...</p>}
 
-        {!loading && !query && filter === "all" && (
+        {!loading && !loadError && !query && filter === "all" && (
           <>
             <section className="groups-section">
               <div className="section-heading-row">
@@ -118,7 +120,7 @@ export default function Groups({
           </>
         )}
 
-        {!loading && (query || filter !== "all") && (
+        {!loading && !loadError && (query || filter !== "all") && (
           filtered.length === 0
             ? <section className="community-card"><p>No community groups found.</p></section>
             : <div className="groups-grid">{filtered.map((group) => <GroupCard group={group} key={group.id || group.name} />)}</div>

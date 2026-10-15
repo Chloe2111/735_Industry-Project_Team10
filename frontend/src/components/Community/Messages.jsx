@@ -39,9 +39,7 @@ export default function Messages({ onNavigate }) {
 
   return (
     <div className="community-page">
-      <CommunityHeader active="messages" onNavigate={onNavigate} />
-
-      <div className="breadcrumb">Community Portal › Messages</div>
+      <CommunityHeader active="messages" onNavigate={onNavigate} crumbs={["Messages"]} />
 
       <main className="messages-page">
         <aside className="conversation-list">

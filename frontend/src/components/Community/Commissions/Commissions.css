@@ -28,52 +28,8 @@ button {
   background: #f4f0e8;
 }
 
-/* ---------- TOP HEADER ---------- */
+/* The page header and breadcrumbs come from CommunityHeader (shared portal styles). */
 
-.portal-topbar {
-  height: 38px;
-  background: #292929;
-  color: #d7d7d7;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  font-size: 12px;
-}
-
-.portal-topbar strong {
-  color: white;
-}
-
-.portal-nav {
-  min-height: 72px;
-  background: white;
-  border-bottom: 1px solid #dedbd4;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  padding: 0 48px;
-}
-
-.brand-area,
-.profile-area,
-.nav-links {
-  display: flex;
-  align-items: center;
-}
-
-.brand-area {
-  gap: 15px;
-}
-
-.vcnity-logo {
-  font-size: 27px;
-  font-weight: 800;
-  color: #ed6b2d;
-  letter-spacing: -1.5px;
-}
-
-.community-pill,
 .category-badge {
   display: inline-block;
   background: #fff1e9;
@@ -84,62 +40,12 @@ button {
   font-weight: 700;
 }
 
-.nav-links {
-  gap: 8px;
-}
-
-.nav-links button {
-  border: none;
-  background: transparent;
-  padding: 25px 15px;
-  color: #666;
-  border-bottom: 2px solid transparent;
-}
-
-.nav-links button:hover,
-.nav-links button.active {
-  color: #222;
-  border-bottom-color: #ed6b2d;
-}
-
-.profile-area {
-  justify-content: flex-end;
-  gap: 10px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.profile-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: #ed6b2d;
-  color: white;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.breadcrumb {
-  max-width: 1340px;
-  margin: auto;
-  padding: 20px 30px;
-  font-size: 12px;
-  color: #797979;
-}
-
-.breadcrumb span {
-  padding: 0 8px;
-  color: #aaa;
-}
-
 /* ---------- MAIN LAYOUT ---------- */
 
 .commission-layout {
   max-width: 1340px;
   margin: 0 auto;
-  padding: 0 30px 50px;
+  padding: 24px 30px 50px;
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 24px;
@@ -735,17 +641,6 @@ button {
 /* ---------- RESPONSIVE ---------- */
 
 @media (max-width: 1000px) {
-  .portal-nav {
-    grid-template-columns: 1fr auto;
-    padding: 0 20px;
-  }
-
-  .nav-links {
-    order: 3;
-    grid-column: 1 / -1;
-    justify-content: center;
-  }
-
   .commission-layout {
     grid-template-columns: 1fr;
   }
@@ -770,14 +665,6 @@ button {
   .detail-information {
     grid-template-columns: 1fr;
     gap: 18px;
-  }
-
-  .portal-nav {
-    padding: 10px 15px;
-  }
-
-  .profile-area span:last-child {
-    display: none;
   }
 
   .commission-main,

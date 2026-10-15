@@ -103,12 +103,7 @@ export default function SubmitIdea({ onNavigate }) {
 
   return (
     <div className="commission-page">
-      <CommunityHeader active="commissions" onNavigate={onNavigate} />
-
-      <div className="breadcrumb">
-        Community Portal <span>›</span> Commissions <span>›</span> Skate Park
-        Design Consultation <span>›</span> Submit an Idea
-      </div>
+      <CommunityHeader active="commissions" onNavigate={onNavigate} crumbs={["Commissions", "Skate Park Design Consultation", "Submit an Idea"]} />
 
       <main className="commission-layout">
         <CommunitySidebar onNavigate={onNavigate} />
