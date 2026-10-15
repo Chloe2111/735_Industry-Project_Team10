@@ -4,12 +4,7 @@ import CommunityHeader, { ChatButton } from "../CommunityHeader";
 export default function SubmissionSuccess({ onNavigate }) {
   return (
     <div className="commission-page">
-      <CommunityHeader active="commissions" onNavigate={onNavigate} />
-
-      <div className="breadcrumb">
-        Community Portal <span>›</span> Commissions <span>›</span> Submission
-        Confirmation
-      </div>
+      <CommunityHeader active="commissions" onNavigate={onNavigate} crumbs={["Commissions", "Submission Confirmation"]} />
 
       <main className="commission-layout">
         <CommunitySidebar onNavigate={onNavigate} />

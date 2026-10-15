@@ -39,11 +39,7 @@ export default function OpenCommissions({ onNavigate }) {
 
   return (
     <div className="commission-page">
-      <CommunityHeader active="commissions" onNavigate={onNavigate} />
-
-      <div className="breadcrumb">
-        Community Portal <span>›</span> Commissions
-      </div>
+      <CommunityHeader active="commissions" onNavigate={onNavigate} crumbs={["Commissions"]} />
 
       <main className="commission-layout">
         <CommunitySidebar onNavigate={onNavigate} />

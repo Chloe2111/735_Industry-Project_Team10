@@ -4,11 +4,7 @@ import CommunityHeader, { Avatar } from "./CommunityHeader";
 export default function Profile({ onNavigate }) {
   return (
     <div className="community-page">
-      <CommunityHeader active="" onNavigate={onNavigate} />
-
-      <div className="breadcrumb">
-        Community Portal › Profile
-      </div>
+      <CommunityHeader active="" onNavigate={onNavigate} crumbs={["Profile"]} />
 
       <main className="standard-page profile-page">
         <section className="community-card profile-header-card">

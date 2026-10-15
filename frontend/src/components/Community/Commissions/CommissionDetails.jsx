@@ -4,12 +4,7 @@ import CommunityHeader, { ChatButton } from "../CommunityHeader";
 export default function CommissionDetails({ onNavigate }) {
   return (
     <div className="commission-page">
-      <CommunityHeader active="commissions" onNavigate={onNavigate} />
-
-      <div className="breadcrumb">
-        Community Portal <span>›</span> Commissions <span>›</span> Skate Park
-        Design Consultation
-      </div>
+      <CommunityHeader active="commissions" onNavigate={onNavigate} crumbs={["Commissions", "Skate Park Design Consultation"]} />
 
       <main className="commission-layout">
         <CommunitySidebar onNavigate={onNavigate} />

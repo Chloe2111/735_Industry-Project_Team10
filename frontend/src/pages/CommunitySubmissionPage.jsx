@@ -43,16 +43,20 @@ export default function CommunitySubmissionPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [savingTier, setSavingTier] = useState(false)
 
-  const loadGroups = useCallback(async () => {
+  const loadGroups = useCallback(async (signal) => {
     try {
-      setGroups(await listGroupTiers())
+      setGroups(await listGroupTiers(signal ? { signal } : undefined))
     } catch (err) {
+      if (err?.name === 'AbortError') return
       toast.error(err.message || 'Unable to load groups.')
     }
   }, [toast])
 
   useEffect(() => {
-    loadGroups()
+    // Abort on unmount (and React's development double-run) so a failure is reported once.
+    const controller = new AbortController()
+    loadGroups(controller.signal)
+    return () => controller.abort()
   }, [loadGroups])
 
   // Loads the group's posts together with the latest tiers, so a group that someone has just

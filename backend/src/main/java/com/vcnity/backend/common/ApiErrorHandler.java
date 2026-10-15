@@ -9,7 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * The one place where the exceptions-queue and intake controllers turn errors into responses.
+ * The one place where the exceptions-queue, intake and community controllers turn errors into responses.
  * Every error body is { "message": "..." } (plus any details), which the frontend's apiClient
  * already knows how to show.
  *
@@ -17,7 +17,8 @@ import java.util.Map;
  *   ApiException             -> the status the exception carries (409, 422, 503, ...)
  *   DataAccessException      -> 503  the database could not be reached; nothing was saved
  */
-@RestControllerAdvice(basePackages = {"com.vcnity.backend.exceptions", "com.vcnity.backend.intake"})
+@RestControllerAdvice(basePackages = {"com.vcnity.backend.exceptions", "com.vcnity.backend.intake",
+        "com.vcnity.backend.community"})
 public class ApiErrorHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)

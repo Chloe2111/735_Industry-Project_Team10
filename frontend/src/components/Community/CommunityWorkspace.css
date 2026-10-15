@@ -3,21 +3,18 @@ body { margin: 0; font-family: Inter, Arial, Helvetica, sans-serif; color:#222; 
 button,input,textarea,select { font: inherit; }
 button { cursor:pointer; }
 .community-page { min-height:100vh; background:#f4f0e8; }
-.portal-topbar { height:38px; background:#292929; color:#d7d7d7; display:flex; align-items:center; justify-content:center; gap:9px; font-size:12px; }
-.portal-topbar strong { color:#fff; }
-.portal-nav { min-height:72px; background:#fff; border-bottom:1px solid #dedbd4; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; padding:0 48px; }
-.brand-area,.profile-area,.nav-links { display:flex; align-items:center; }
-.brand-area { gap:15px; }
-.vcnity-logo { font-size:27px; font-weight:800; color:#ed6b2d; letter-spacing:-1.5px; }
-.community-pill,.tag { display:inline-block; background:#fff1e9; color:#d85d24; border-radius:999px; padding:6px 11px; font-size:11px; font-weight:700; }
-.nav-links { gap:8px; }
-.nav-links button { border:0; background:transparent; padding:25px 15px; color:#666; border-bottom:2px solid transparent; }
-.nav-links button:hover,.nav-links button.active { color:#222; border-bottom-color:#ed6b2d; }
-.profile-area { justify-content:flex-end; gap:10px; font-size:13px; font-weight:600; }
-.profile-button { justify-self:end; border:0; background:transparent; }
-.profile-avatar,.avatar { width:34px; height:34px; border-radius:50%; background:#ed6b2d; color:#fff; display:inline-grid; place-items:center; font-size:12px; font-weight:700; flex:0 0 auto; }
-.breadcrumb { max-width:1340px; margin:auto; padding:20px 30px; font-size:12px; color:#797979; }
-.standard-page,.form-page,.dashboard-layout,.messages-page { max-width:1280px; margin:0 auto; padding:0 30px 50px; }
+/* Header: shares PortalLayout.css with the client and facilitator portals.
+   The community links are buttons, so reset the button look here. */
+.community-topnav .portal-topnav__link,
+.community-topnav .portal-topnav__account { background: none; font-family: inherit; cursor: pointer; }
+.community-topnav .portal-topnav__account { border: 0; }
+.portal-breadcrumbs__item { display: inline-flex; gap: 0.4rem; }
+.community-load-error { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-color: #f0c9b5; background: #fff8f4; }
+.community-load-error p { margin: 0; color: #8a3a12; font-size: 14px; }
+.community-load-error button { white-space: nowrap; flex: 0 0 auto; }
+.tag { display:inline-block; background:#fff1e9; color:#d85d24; border-radius:999px; padding:6px 11px; font-size:11px; font-weight:700; }
+.avatar { width:34px; height:34px; border-radius:50%; background:#ed6b2d; color:#fff; display:inline-grid; place-items:center; font-size:12px; font-weight:700; flex:0 0 auto; }
+.standard-page,.form-page,.dashboard-layout,.messages-page { max-width:1280px; margin:0 auto; padding:24px 30px 50px; }
 .dashboard-layout { display:grid; grid-template-columns:220px minmax(0,1fr) 280px; gap:24px; align-items:start; }
 .side-column,.feed-column { display:flex; flex-direction:column; gap:18px; }
 .feed-column>h1 { margin:4px 0 0; font-size:22px; }
@@ -101,8 +98,8 @@ button { cursor:pointer; }
 .tag-list { display:flex; flex-wrap:wrap; gap:8px; }
 .chat-button { position:fixed; right:28px; bottom:25px; width:48px; height:48px; border:0; border-radius:50%; background:#222; color:#fff; box-shadow:0 5px 18px rgba(0,0,0,.2); }
 .chat-button span { position:absolute; right:-3px; top:-5px; background:#ed6b2d; color:#fff; min-width:18px; height:18px; border-radius:999px; display:grid; place-items:center; font-size:10px; }
-@media(max-width:1000px){.dashboard-layout{grid-template-columns:1fr}.groups-grid{grid-template-columns:1fr}.group-view-layout,.profile-layout{grid-template-columns:1fr}.messages-page{grid-template-columns:1fr}.portal-nav{grid-template-columns:1fr;padding:14px 20px;gap:8px}.nav-links{justify-content:center;flex-wrap:wrap}.profile-button{justify-self:start}.side-column{display:grid;grid-template-columns:repeat(2,1fr)}}
-@media(max-width:650px){.standard-page,.form-page,.dashboard-layout,.messages-page{padding-left:16px;padding-right:16px}.side-column{display:flex}.search-row{grid-template-columns:1fr}.page-title-row,.group-hero,.profile-header-card{display:flex;flex-direction:column;align-items:flex-start}.portal-nav{display:flex;flex-direction:column;align-items:stretch}.nav-links button{padding:10px 8px}.profile-button{align-self:flex-end}.messages-page{display:block}.conversation-list,.chat-panel{border-radius:8px;margin-bottom:12px}}
+@media(max-width:1000px){.dashboard-layout{grid-template-columns:1fr}.groups-grid{grid-template-columns:1fr}.group-view-layout,.profile-layout{grid-template-columns:1fr}.messages-page{grid-template-columns:1fr}.community-topnav{flex-wrap:wrap;gap:12px}.community-topnav .portal-topnav__links{order:3;flex-basis:100%;flex-wrap:wrap}.side-column{display:grid;grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.standard-page,.form-page,.dashboard-layout,.messages-page{padding-left:16px;padding-right:16px}.side-column{display:flex}.search-row{grid-template-columns:1fr}.page-title-row,.group-hero,.profile-header-card{display:flex;flex-direction:column;align-items:flex-start}.messages-page{display:block}.conversation-list,.chat-panel{border-radius:8px;margin-bottom:12px}}
 
 /* Story 17 group discovery and membership actions */
 .groups-section { margin-top:24px; }

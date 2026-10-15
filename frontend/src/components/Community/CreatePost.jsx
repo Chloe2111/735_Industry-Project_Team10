@@ -41,7 +41,7 @@ export default function CreatePost({ onNavigate, groups = [], selectedGroup, onC
     } finally { setSubmitting(false); }
   }
 
-  return <div className="community-page"><CommunityHeader active="dashboard" onNavigate={onNavigate} /><div className="breadcrumb">Community Portal › Create Post</div><main className="form-page"><button className="back-button" onClick={() => onNavigate("dashboard")}>← Back</button><div className="page-heading"><h1>Create Post</h1><p>Share an update, idea or resource with your community.</p></div><form className="community-card large-form" onSubmit={handleSubmit}>
+  return <div className="community-page"><CommunityHeader active="dashboard" onNavigate={onNavigate} crumbs={["Create Post"]} /><main className="form-page"><button className="back-button" onClick={() => onNavigate("dashboard")}>← Back</button><div className="page-heading"><h1>Create Post</h1><p>Share an update, idea or resource with your community.</p></div><form className="community-card large-form" onSubmit={handleSubmit}>
     <label>Group *<select value={groupId} onChange={(e) => setGroupId(e.target.value)}><option value="">Select a group</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
     <label>Title *<input value={title} onChange={(e) => setTitle(e.target.value)} maxLength="120" placeholder="Post title" /></label>
     <label>Post *<textarea value={text} onChange={(e) => setText(e.target.value)} maxLength="1000" placeholder="What would you like to share?" /><small>{text.length}/1000</small></label>

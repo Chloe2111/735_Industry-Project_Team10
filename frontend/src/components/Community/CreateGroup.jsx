@@ -39,8 +39,7 @@ export default function CreateGroup({ onNavigate, onCreateGroup }) {
   }
 
   return <div className="community-page">
-    <CommunityHeader active="groups" onNavigate={onNavigate} />
-    <div className="breadcrumb">Community Portal › Groups › Create Group</div>
+    <CommunityHeader active="groups" onNavigate={onNavigate} crumbs={["Groups", "Create Group"]} />
     <main className="form-page">
       <button className="back-button" onClick={() => onNavigate("groups")}>← Back to Groups</button>
       <div className="page-heading"><h1>Create a Group</h1><p>Create a community space where members can connect and collaborate.</p></div>

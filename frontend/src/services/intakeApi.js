@@ -52,8 +52,8 @@ export function listPublished(groupId) {
 }
 
 /** Every group that a person has classified, with its tier, history and version. */
-export function listGroupTiers() {
-  return apiClient.get('/intake/group-tiers')
+export function listGroupTiers(options) {
+  return apiClient.get('/intake/group-tiers', options)
 }
 
 /**
