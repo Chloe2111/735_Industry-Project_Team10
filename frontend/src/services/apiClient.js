@@ -25,6 +25,10 @@ export class ApiError extends Error {
 const NETWORK_MESSAGE =
   'Unable to reach the server. Check your connection and try again.'
 const FALLBACK_MESSAGE = 'Something went wrong. Please try again.'
+// Used when the server fails without explaining why (e.g. the backend is down
+// behind the Vite proxy, or MongoDB is unreachable), so the toast says it is
+// a server problem rather than something the user did.
+const SERVER_MESSAGE = 'The server could not complete this request. Please try again shortly.'
 
 async function readBody(response) {
   const contentType = response.headers.get('content-type') ?? ''
@@ -56,7 +60,8 @@ async function request(path, { method = 'GET', body, signal, headers } = {}) {
   const payload = await readBody(response)
 
   if (!response.ok) {
-    throw new ApiError(payload.message || FALLBACK_MESSAGE, {
+    const fallback = response.status >= 500 ? `${SERVER_MESSAGE} (error ${response.status})` : FALLBACK_MESSAGE
+    throw new ApiError(payload.message || fallback, {
       status: response.status,
       fieldErrors: payload.errors ?? {},
     })
