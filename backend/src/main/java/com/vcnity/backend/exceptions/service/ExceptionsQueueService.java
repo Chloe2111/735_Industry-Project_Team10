@@ -200,6 +200,7 @@ public class ExceptionsQueueService {
         if (reason.contains("contradiction")) result.add(FlagType.CONTESTED);
         if (reason.contains("tierViolation")) result.add(FlagType.TIER_VIOLATION);
         if (reason.contains("REPRESENTATION_GAP")) result.add(FlagType.REPRESENTATION_GAP);
+        if (reason.contains("aiCouldNotCode")) result.add(FlagType.AI_COULD_NOT_CODE);
         return result;
     }
 

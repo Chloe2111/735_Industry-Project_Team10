@@ -5,6 +5,7 @@ import './ExceptionsQueue.css'
 
 const FLAG_HELP = {
   REPRESENTATION_GAP: 'An expected speaker has no coded findings. Review source coverage before clearing.',
+  AI_COULD_NOT_CODE: 'The AI could not code this feedback (it failed or found no themes). The evidence below is the de-identified text: reject it with a reason, or code it yourself.',
   QUOTE_NOT_FOUND: 'Quoted evidence could not be located in the source.',
   LOW_CONFIDENCE: 'AI confidence fell below the review threshold.',
   SOURCE_MISSING: 'No traceable source was available for this finding.',
@@ -186,7 +187,7 @@ export default function ExceptionsQueue({ communitySubmissions = null }) {
               </p>
             )}
             <dl className="evidence-grid">
-              <div><dt>Flagged quote</dt><dd>{selected.sourceQuote || 'Not available'}</dd></div>
+              <div><dt>{selected.flagType === 'AI_COULD_NOT_CODE' ? 'Submitted text (de-identified)' : 'Flagged quote'}</dt><dd>{selected.sourceQuote || 'Not available'}</dd></div>
               <div><dt>Confidence</dt><dd>{selected.confidence == null ? 'Not available' : selected.confidence.toFixed(2)}</dd></div>
               <div className="evidence-wide"><dt>Source context</dt><dd>{selected.sourceContext || 'No source context available.'}</dd></div>
             </dl>

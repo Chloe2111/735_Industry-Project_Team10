@@ -59,6 +59,15 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
     static final String CLEARED_REASON =
             "Every flag was cleared by a reviewer. It stays hidden until a reviewer publishes it.";
 
+    /** Shown to the reviewer for a submission the AI could not code. */
+    static final String AI_COULD_NOT_CODE_CONTEXT =
+            "The AI could not code this community submission (it failed or found no themes)."
+            + " The evidence is the de-identified text. Reject it with a reason, or code it yourself."
+            + " Clearing a flag does not publish it.";
+
+    static final String AI_COULD_NOT_CODE_STATUS =
+            "The AI could not code this feedback. Waiting for a person to review it.";
+
     static final String HIDDEN_BY_TIER3_MESSAGE =
             "This feedback was published, but its group is now Tier 3, so it is hidden until a person re-checks it.";
 
@@ -129,7 +138,9 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
                 copyCodingResult(submission, outcome);
                 submission.setFlags(splitFlags(outcome.reason()));
                 submission.setStatus(SubmissionStatus.PENDING_REVIEW);
-                submission.setStatusReason("Waiting for a person to review: " + outcome.reason());
+                submission.setStatusReason(submission.getFlags().contains(DefaultPipelineRunner.AI_COULD_NOT_CODE)
+                        ? AI_COULD_NOT_CODE_STATUS
+                        : "Waiting for a person to review: " + outcome.reason());
                 if (reviewFlagTypes(submission).isEmpty()) {
                     // Never publish and never lose it silently: it stays hidden and says why.
                     submission.setStatusReason("Flagged (" + outcome.reason()
@@ -490,7 +501,12 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
 
         List<String> ids = new ArrayList<>();
         for (FlagType type : reviewFlagTypes(submission)) {
-            ExceptionItem item = new ExceptionItem(null, type, submission.getQuote(), context, confidence, submission.getId());
+            // With no AI quote to check, the reviewer needs the (de-identified) text itself.
+            boolean notCoded = type == FlagType.AI_COULD_NOT_CODE;
+            ExceptionItem item = new ExceptionItem(null, type,
+                    notCoded ? submission.getText() : submission.getQuote(),
+                    notCoded ? AI_COULD_NOT_CODE_CONTEXT : context,
+                    notCoded ? null : confidence, submission.getId());
             item.setSourceType(SOURCE_TYPE);
             item.setSourceId(submission.getId());
             try {

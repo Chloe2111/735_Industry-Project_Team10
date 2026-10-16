@@ -6,5 +6,7 @@ public enum FlagType {
     SOURCE_MISSING,
     CONTESTED,
     TIER_VIOLATION,
-    REPRESENTATION_GAP
+    REPRESENTATION_GAP,
+    /** The AI failed or found no themes, so a person must read the de-identified text and code or reject it. */
+    AI_COULD_NOT_CODE
 }
