@@ -1,9 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CommunitySidebar } from "./OpenCommissions";
 import CommunityHeader, { ChatButton } from "../CommunityHeader";
+import { listGroupTiers, submitFeedback } from "../../../services/intakeApi";
+import { tierName } from "../../../constants/tiers";
+import { useToast } from "../../Toast/ToastProvider";
+
+/**
+ * The idea is sent to intake as one text, with each answer labelled, so the
+ * pipeline (tier gate -> de-identification -> AI coding) sees the whole idea.
+ */
+export function buildIdeaText(formData) {
+  const parts = [
+    ["Idea title", formData.title],
+    ["Idea", formData.description],
+    ["Problem it solves", formData.problem],
+    ["Who would benefit", formData.beneficiaries],
+    ["Expected community impact", formData.impact],
+  ];
+  return parts
+    .filter(([, value]) => value && value.trim())
+    .map(([label, value]) => `${label}: ${value.trim()}`)
+    .join("\n");
+}
 
 export default function SubmitIdea({ onNavigate }) {
+  const toast = useToast();
+  const [groups, setGroups] = useState([]);
+  const [groupsError, setGroupsError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
+    groupId: "",
     title: "",
     description: "",
     problem: "",
@@ -18,6 +44,22 @@ export default function SubmitIdea({ onNavigate }) {
 
   const allowedExtensions = ["png", "jpg", "jpeg", "pdf", "mp4", "mov", "mp3", "wav", "m4a"];
   const maxFileSize = 10 * 1024 * 1024;
+
+  // The group decides the sensitivity tier, so the idea must name a classified group.
+  useEffect(() => {
+    const controller = new AbortController();
+    listGroupTiers({ signal: controller.signal })
+      .then((data) => {
+        const classified = (Array.isArray(data) ? data : []).filter((group) => group?.groupId && group.tier != null);
+        setGroups(classified);
+        setGroupsError(classified.length === 0 ? "No groups have a tier yet. Ask a coordinator to classify your group first." : "");
+      })
+      .catch((error) => {
+        if (error?.name === "AbortError") return;
+        setGroupsError(error.message || "Could not load your groups. Please try again.");
+      });
+    return () => controller.abort();
+  }, []);
 
   function handleAttachments(event) {
     const selected = Array.from(event.target.files || []);
@@ -58,6 +100,10 @@ export default function SubmitIdea({ onNavigate }) {
   function validateForm() {
     const newErrors = {};
 
+    if (!formData.groupId) {
+      newErrors.groupId = "Choose the group you are submitting with.";
+    }
+
     if (!formData.title.trim()) {
       newErrors.title = "Idea title is required.";
     } else if (formData.title.trim().length < 3) {
@@ -87,14 +133,25 @@ export default function SubmitIdea({ onNavigate }) {
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
-    if (!validateForm()) {
+    if (!validateForm() || submitting) {
       return;
     }
 
-    onNavigate("success");
+    setSubmitting(true);
+    try {
+      const receipt = await submitFeedback({
+        groupIds: [formData.groupId],
+        text: buildIdeaText(formData),
+      });
+      onNavigate("success", { receipt, title: formData.title.trim() });
+    } catch (error) {
+      toast.error(error.message || "Could not submit your idea. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleDraft() {
@@ -130,6 +187,22 @@ export default function SubmitIdea({ onNavigate }) {
                 understand your idea.
               </p>
             </div>
+
+            <FormField
+              label="Your group"
+              required
+              helper="Your group's sensitivity tier decides how this idea is handled."
+              error={errors.groupId || groupsError}
+            >
+              <select name="groupId" value={formData.groupId} onChange={handleChange} aria-label="Your group">
+                <option value="">Select your group</option>
+                {groups.map((group) => (
+                  <option key={group.groupId} value={group.groupId}>
+                    {(group.groupName || group.groupId) + " · " + tierName(group.tier)}
+                  </option>
+                ))}
+              </select>
+            </FormField>
 
             <FormField
               label="Idea title"
@@ -220,6 +293,7 @@ export default function SubmitIdea({ onNavigate }) {
                 <strong>Add supporting material</strong>
                 <p>Upload images, PDFs, videos or audio files.</p>
                 <small>PNG, JPG, JPEG, PDF, MP4, MOV, MP3, WAV, M4A · Max 10MB each</small>
+                <small className="attachment-note">Attachments are not sent for analysis yet. Only the text of your idea is submitted.</small>
 
                 <label className="secondary-button upload-button">
                   Add files
@@ -277,8 +351,9 @@ export default function SubmitIdea({ onNavigate }) {
               <button
                 className="black-button full-width"
                 type="submit"
+                disabled={submitting}
               >
-                Submit Idea →
+                {submitting ? "Submitting…" : "Submit Idea →"}
               </button>
             </div>
 

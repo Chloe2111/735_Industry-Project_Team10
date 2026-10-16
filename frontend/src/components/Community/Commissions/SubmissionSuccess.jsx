@@ -1,7 +1,22 @@
 import { CommunitySidebar } from "./OpenCommissions";
 import CommunityHeader, { ChatButton } from "../CommunityHeader";
+import { tierName } from "../../../constants/tiers";
 
-export default function SubmissionSuccess({ onNavigate }) {
+const STATUS_LABELS = {
+  PUBLISHED: "Published",
+  PENDING_REVIEW: "Waiting for a facilitator to review",
+  CLEARED: "Checked – waiting to be published",
+  REJECTED: "Not published",
+  HELD: "Held – not published",
+};
+
+function formatWhen(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+export default function SubmissionSuccess({ onNavigate, submission = null }) {
+  const receipt = submission?.receipt ?? null;
   return (
     <div className="commission-page">
       <CommunityHeader active="commissions" onNavigate={onNavigate} crumbs={["Commissions", "Submission Confirmation"]} />
@@ -30,23 +45,30 @@ export default function SubmissionSuccess({ onNavigate }) {
 
               <div className="submission-detail-row">
                 <span>Idea title</span>
-                <strong>Inclusive Skate Zone</strong>
+                <strong>{submission?.title || "—"}</strong>
               </div>
 
               <div className="submission-detail-row">
                 <span>Submitted on</span>
-                <strong>15 May 2026, 11:24 AM</strong>
+                <strong>{receipt ? formatWhen(receipt.submittedAt) : "—"}</strong>
+              </div>
+
+              <div className="submission-detail-row">
+                <span>Handled as</span>
+                <strong>{receipt ? tierName(receipt.tier) : "—"}</strong>
               </div>
 
               <div className="submission-detail-row">
                 <span>Reference ID</span>
-                <strong>VCN-2026-000123</strong>
+                <strong>{receipt?.id ?? "—"}</strong>
               </div>
 
               <div className="submission-detail-row">
                 <span>Status</span>
-                <strong className="status-badge">Under Review</strong>
+                <strong className="status-badge">{receipt ? (STATUS_LABELS[receipt.status] ?? receipt.status) : "—"}</strong>
               </div>
+
+              {receipt?.message && <p className="submission-receipt-message">{receipt.message}</p>}
             </div>
 
             <div className="success-buttons">

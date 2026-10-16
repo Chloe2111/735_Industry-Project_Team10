@@ -440,6 +440,7 @@ button {
 }
 
 .submission-field input,
+.submission-field select,
 .submission-field textarea {
   width: 100%;
   border: 1px solid #d7d3cc;
@@ -451,6 +452,7 @@ button {
 }
 
 .submission-field input:focus,
+.submission-field select:focus,
 .submission-field textarea:focus {
   border-color: #ed6b2d;
 }
@@ -679,3 +681,16 @@ button {
 .attachment-item { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:9px 10px; border:1px solid #e1ded8; border-radius:5px; background:#fff; font-size:11px; }
 .attachment-item span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .attachment-item button { border:0; background:transparent; color:#a13d35; font-size:11px; }
+
+/* Submit Idea: real intake receipt and text-only note */
+.attachment-note {
+  display: block;
+  margin-top: 6px;
+  font-style: italic;
+}
+
+.submission-receipt-message {
+  margin: 14px 0 0;
+  font-size: 14px;
+  color: #5f5a53;
+}
