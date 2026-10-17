@@ -211,14 +211,19 @@ class DefaultPipelineRunnerTest {
     }
 
     @Test
-    void noFindingsWithoutReviewStillFailsClosed() throws Exception {
+    void noFindingsAloneIsSentForHumanCodingNotPublished() throws Exception {
         var runner = runner(id -> List.of(
                 new PipelineService.PipelineOutcome(
                         id, "no_findings", null, null, null, null, 0)
         ));
 
-        assertThrows(IllegalStateException.class,
-                () -> runner.run("S1", 1, TEXT));
+        var result = runner.run("S1", 1, TEXT);
+
+        assertEquals("exceptions_queue", result.stageReached());
+        assertEquals(DefaultPipelineRunner.AI_COULD_NOT_CODE, result.reason());
+        assertNull(result.theme());
+        assertNull(result.quote());
+        assertNull(result.confidence());
     }
 
     @Test
@@ -228,7 +233,10 @@ class DefaultPipelineRunnerTest {
                 outcome(id, "exceptions_queue", "REPRESENTATION_GAP")
         ));
 
-        assertThrows(IllegalStateException.class,
-                () -> runner.run("S1", 1, TEXT));
+        var result = runner.run("S1", 1, TEXT);
+
+        assertEquals("exceptions_queue", result.stageReached());
+        assertEquals(DefaultPipelineRunner.AI_COULD_NOT_CODE + ", REPRESENTATION_GAP", result.reason());
+        assertNull(result.theme(), "no AI evidence is shown for an item the AI could not code");
     }
 }

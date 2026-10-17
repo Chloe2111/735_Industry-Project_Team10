@@ -14,9 +14,18 @@ import java.util.Set;
 /**
  * Combines all outcomes for a submission.
  * A review flag or rejection must never be hidden by a clean outcome.
+ *
+ * When the AI could not code the text (the call failed, its answer was unusable, or it found no
+ * themes), the result is a review outcome with the reason "aiCouldNotCode", so a person reads the
+ * de-identified text and codes or rejects it. It is never treated as publishable.
  */
 @Component
 public class DefaultPipelineRunner implements PipelineRunner {
+
+    /** Review reason for text the AI could not code. Maps to FlagType.AI_COULD_NOT_CODE. */
+    public static final String AI_COULD_NOT_CODE = "aiCouldNotCode";
+
+    private static final System.Logger LOG = System.getLogger(DefaultPipelineRunner.class.getName());
 
     private final PipelineService pipeline;
     private final FindingRepository findings;
@@ -81,7 +90,8 @@ public class DefaultPipelineRunner implements PipelineRunner {
         for (var outcome : matching) {
             if (!"clean".equals(outcome.stageReached())
                     && !"exceptions_queue".equals(outcome.stageReached())
-                    && !"no_findings".equals(outcome.stageReached())) {
+                    && !"no_findings".equals(outcome.stageReached())
+                    && !"coding_failed".equals(outcome.stageReached())) {
                 throw new IllegalStateException("Unexpected pipeline outcome stage");
             }
             if ("clean".equals(outcome.stageReached())
@@ -94,18 +104,28 @@ public class DefaultPipelineRunner implements PipelineRunner {
                 .filter(outcome -> "exceptions_queue".equals(outcome.stageReached()))
                 .toList();
 
-        if (flagged.isEmpty()) {
-            // No findings alone must not be treated as a publishable result.
-            if (matching.stream().anyMatch(outcome ->
-                    "no_findings".equals(outcome.stageReached()))) {
-                throw new IllegalStateException(
-                        "The pipeline returned no findings without a review outcome");
-            }
+        // The AI could not code the text: it failed, or it found nothing and no other check flagged it.
+        // A person reads the de-identified text instead. Never publishable, never silently dropped.
+        boolean codingFailed = matching.stream()
+                .anyMatch(outcome -> "coding_failed".equals(outcome.stageReached()));
+        boolean nothingFound = flagged.isEmpty() && matching.stream()
+                .anyMatch(outcome -> "no_findings".equals(outcome.stageReached()));
+        boolean aiCouldNotCode = codingFailed || nothingFound;
+
+        if (flagged.isEmpty() && !aiCouldNotCode) {
             persistFindings(itemId, result);
             return matching.get(0);
         }
 
         Set<String> reasons = new LinkedHashSet<>();
+        if (aiCouldNotCode) {
+            reasons.add(AI_COULD_NOT_CODE);
+            LOG.log(System.Logger.Level.WARNING, "The AI could not code submission {0} ({1}); sent for human review.",
+                    itemId, matching.stream()
+                            .filter(o -> "coding_failed".equals(o.stageReached()) || "no_findings".equals(o.stageReached()))
+                            .map(o -> o.reason() == null ? o.stageReached() : o.reason())
+                            .distinct().toList());
+        }
         for (var outcome : flagged) {
             if (outcome.reason() == null || outcome.reason().isBlank()) {
                 throw new IllegalStateException("Flagged outcome has no review reason");
@@ -122,9 +142,6 @@ public class DefaultPipelineRunner implements PipelineRunner {
             }
         }
 
-        // The legacy outcome holds one evidence tuple; retain it from a flagged
-        // outcome rather than combining unrelated quote/confidence fields.
-        var evidence = flagged.get(0);
         int redactions = matching.stream()
                 .mapToInt(PipelineService.PipelineOutcome::redactionCount)
                 .max()
@@ -132,6 +149,17 @@ public class DefaultPipelineRunner implements PipelineRunner {
 
         persistFindings(itemId, result);
 
+        if (aiCouldNotCode) {
+            // No AI theme, quote or confidence to show: the reviewer works from the source text.
+            return new PipelineService.PipelineOutcome(
+                    itemId, "exceptions_queue", String.join(", ", reasons),
+                    null, null, null, redactions
+            );
+        }
+
+        // The legacy outcome holds one evidence tuple; retain it from a flagged
+        // outcome rather than combining unrelated quote/confidence fields.
+        var evidence = flagged.get(0);
         return new PipelineService.PipelineOutcome(
                 itemId, "exceptions_queue", String.join(", ", reasons),
                 evidence.theme(), evidence.quote(), evidence.confidence(), redactions

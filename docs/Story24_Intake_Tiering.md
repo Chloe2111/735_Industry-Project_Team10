@@ -114,7 +114,7 @@ always as `{ "message": "..." }`:
 | 400 | The request is invalid (missing group, empty text, reject without a note, bad source tag) |
 | 409 | A tier change was made from a stale view, a reviewer tried to clear a halted item, or a publish is not allowed yet |
 | 422 | The group has no tier (body also lists `unclassifiedGroupIds`) |
-| 503 | The pipeline or the database is unavailable. Nothing was saved |
+| 503 | The database (or de-identification) is unavailable. Nothing was saved. An AI failure is **not** a 503: see "When the AI cannot code a submission" |
 
 ## Tiering rules (Mohika's spec)
 
@@ -148,6 +148,19 @@ reason instead of "Exception cleared." The queue screen shows the reason and dis
 be rejected. The same applies to an item that was rejected before the group became Tier 3: it cannot be
 cleared afterwards. A review also cannot publish a submission that was halted in the same instant: the status change
 is a conditional update that only applies while the submission is still in the status the reviewer saw.
+
+## When the AI cannot code a submission
+
+If the AI call fails, its answer is unusable, or it finds no themes, the submission is **not refused**.
+`DefaultPipelineRunner` returns a review outcome with the reason `aiCouldNotCode`, and intake:
+
+- stores only the de-identified text, with status `PENDING_REVIEW` (receipt: "will be checked by a person");
+- raises one queue item with the flag `AI_COULD_NOT_CODE`, whose evidence is that de-identified text;
+- never publishes it automatically. A facilitator rejects it with a reason, or clears it and publishes it,
+  exactly like any other flag. The item is restored after a restart like any other.
+
+Storage failures (MongoDB) still refuse the submission with a 503, because nothing could be saved safely.
+Tests: `AiCouldNotCodeTest` (real pipeline, scripted AI) and `DefaultPipelineRunnerTest`.
 
 ## Sharing the exceptions queue
 
