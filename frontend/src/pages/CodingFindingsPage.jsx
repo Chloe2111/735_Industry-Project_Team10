@@ -18,11 +18,18 @@ const FLAG_LABELS = {
  * local check so a malformed or future-schema response can't silently render
  * restricted content. Anything that fails this is dropped, not shown blank.
  */
+/** True when a facilitator coded this finding because the AI could not. */
+export function isFacilitatorCoded(finding) {
+  return finding?.codedBy === 'facilitator'
+}
+
 export function isRenderableFinding(finding) {
   if (!finding || typeof finding !== 'object') return false
   const { itemId, sourceRef, theme, quote, confidence, tier, flags } = finding
   if (!itemId || !sourceRef || !theme || !quote) return false
-  if (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) return false
+  // A facilitator-coded finding has no meaningful AI confidence, so it may be missing.
+  const confidenceOptional = isFacilitatorCoded(finding) && confidence == null
+  if (!confidenceOptional && (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 1)) return false
   if (tier !== 1 && tier !== 2) return false
   if (!Array.isArray(flags)) return false
   return true
@@ -32,7 +39,16 @@ const COLUMNS = [
   { key: 'theme', header: 'Theme' },
   { key: 'quote', header: 'Quote', render: (row) => <span className="coding-findings-page__quote">&ldquo;{row.quote}&rdquo;</span> },
   { key: 'speakerCode', header: 'Speaker', render: (row) => row.speakerCode ?? 'Unknown speaker' },
-  { key: 'confidence', header: 'Confidence', render: (row) => `${Math.round(row.confidence * 100)}%` },
+  {
+    key: 'confidence',
+    header: 'Confidence',
+    render: (row) =>
+      isFacilitatorCoded(row) ? (
+        <span className="coding-findings-page__facilitator">Coded by facilitator</span>
+      ) : (
+        `${Math.round(row.confidence * 100)}%`
+      ),
+  },
   { key: 'tier', header: 'Tier', render: (row) => `Tier ${row.tier}` },
   {
     key: 'flags',

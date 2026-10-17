@@ -46,6 +46,8 @@ function SourceList({ sources, onSelect, onClose }) {
               {source.flagged && <span className="source-evidence__flagged-badge">AI flagged</span>}
               {source.agreementPercent != null ? (
                 <span className="source-evidence__agree-percent">{source.agreementPercent}% agree</span>
+              ) : source.codedByFacilitator ? (
+                <span className="source-evidence__agree-percent">Coded by facilitator</span>
               ) : (
                 source.aiConfidence != null && (
                   <span className="source-evidence__agree-percent">{source.aiConfidence}% AI confidence</span>
@@ -93,6 +95,16 @@ function SourceDetail({ source, onBack }) {
         </span>
         <p className="source-evidence__quote source-evidence__quote--large">&ldquo;{source.quote}&rdquo;</p>
       </div>
+
+      {source.codedByFacilitator && (
+        <section className="source-evidence__section">
+          <h3>Coded by facilitator</h3>
+          <p className="source-evidence__meter-caption">
+            The AI could not code this idea, so a facilitator read it, chose the theme and picked this sentence as
+            the supporting evidence.
+          </p>
+        </section>
+      )}
 
       {source.agreementPercent == null && source.aiConfidence != null && (
         <section className="source-evidence__section">
