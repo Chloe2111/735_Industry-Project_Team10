@@ -32,8 +32,10 @@ export function ReportsReceivedPage() {
   useEffect(() => {
     let cancelled = false
     listReports()
-      .then(({ data }) => {
-        if (!cancelled) setReports(data)
+      .then(({ data, warnings = [] }) => {
+        if (cancelled) return
+        setReports(data)
+        warnings.forEach((warning) => toast.error(warning))
       })
       .catch((error) => {
         if (!cancelled) toast.error(error.message || 'Could not load reports. Please try again.')
@@ -52,7 +54,8 @@ export function ReportsReceivedPage() {
         <DataTable columns={COLUMNS} rows={reports} rowKey="id" emptyMessage="No reports received yet." />
         <p className="reports-received-page__footnote">
           A report appears here once the group&rsquo;s facilitator resolves every AI review flag — raw community data
-          is never shown in this portal.
+          is never shown in this portal. &ldquo;Community ideas&rdquo; updates live as community ideas pass AI coding and
+          facilitator review.
         </p>
       </div>
     </div>
