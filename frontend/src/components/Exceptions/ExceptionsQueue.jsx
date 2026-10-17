@@ -5,12 +5,33 @@ import './ExceptionsQueue.css'
 
 const FLAG_HELP = {
   REPRESENTATION_GAP: 'An expected speaker has no coded findings. Review source coverage before clearing.',
-  AI_COULD_NOT_CODE: 'The AI could not code this feedback (it failed or found no themes). The evidence below is the de-identified text: reject it with a reason, or code it yourself.',
   QUOTE_NOT_FOUND: 'Quoted evidence could not be located in the source.',
   LOW_CONFIDENCE: 'AI confidence fell below the review threshold.',
   SOURCE_MISSING: 'No traceable source was available for this finding.',
   CONTESTED: 'The result is contested or needs a human tie-breaker.',
   TIER_VIOLATION: 'A data-tier restriction needs investigation. Clearing a flag does not override tier restrictions.',
+  AI_COULD_NOT_CODE: 'The AI could not code this idea. Read it, then either code it yourself (choose a theme and the sentence that supports it) or reject it with a reason.',
+}
+
+const AI_COULD_NOT_CODE = 'AI_COULD_NOT_CODE'
+const MAX_THEME_LENGTH = 80
+
+/**
+ * Splits the de-identified idea text into sentences the facilitator can pick as evidence.
+ * Labels added by Submit Idea ("Idea: ", "Problem it solves: ") are left out, and every
+ * sentence is an exact piece of the text, so the backend's quote check can find it.
+ */
+export function ideaSentences(text) {
+  if (!text) return []
+  const sentences = []
+  for (const line of text.split('\n')) {
+    const body = line.replace(/^[A-Za-z][A-Za-z ]{0,40}:\s+/, '')
+    for (const part of body.split(/(?<=[.!?])\s+/)) {
+      const sentence = part.trim()
+      if (sentence && text.includes(sentence) && !sentences.includes(sentence)) sentences.push(sentence)
+    }
+  }
+  return sentences
 }
 
 const SUBMISSION_STATUS = {
@@ -38,9 +59,19 @@ export default function ExceptionsQueue({ communitySubmissions = null }) {
   const [note, setNote] = useState('')
   const [pendingOnly, setPendingOnly] = useState(true)
   const [submissionStatus, setSubmissionStatus] = useState(null)
+  const [codedTheme, setCodedTheme] = useState('')
+  const [codedQuote, setCodedQuote] = useState('')
 
   const isCommunityItem = selected?.sourceType === 'COMMUNITY_SUBMISSION' && Boolean(selected?.sourceId)
   const canPublish = Boolean(communitySubmissions) && isCommunityItem
+  const needsHumanCoding = selected?.flagType === AI_COULD_NOT_CODE
+  const canApproveCoding = Boolean(codedTheme.trim()) && Boolean(codedQuote)
+
+  function resetReviewInputs() {
+    setNote('')
+    setCodedTheme('')
+    setCodedQuote('')
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -74,7 +105,7 @@ export default function ExceptionsQueue({ communitySubmissions = null }) {
   }, [canPublish, communitySubmissions, selectedId, selectedStatus, selectedSourceId])
 
   async function showUpdated(updated) {
-    setNote('')
+    resetReviewInputs()
     if (pendingOnly) {
       setItems((current) => current.filter((i) => i.id !== updated.id))
       setSelected(null)
@@ -124,6 +155,35 @@ export default function ExceptionsQueue({ communitySubmissions = null }) {
     }
   }
 
+  // "AI could not code": the facilitator's own theme and chosen sentence become the finding,
+  // marked as coded by the facilitator. Then, like Clear & publish, the submission is published.
+  async function approveWithCoding() {
+    if (!selected || !canApproveCoding) return
+    setBusy(true)
+    try {
+      const updated = await exceptionsApi.codeByFacilitator(selected.id, {
+        theme: codedTheme.trim(),
+        quote: codedQuote,
+        note: note.trim(),
+      })
+      if (canPublish) {
+        try {
+          await communitySubmissions.publish(selected.sourceId)
+          toast.success('Coded by facilitator and published.')
+        } catch (err) {
+          toast.error(`Coded, but not published: ${err.message || 'the submission could not be published.'}`)
+        }
+      } else {
+        toast.success('Coded by facilitator.')
+      }
+      await showUpdated(updated)
+    } catch (err) {
+      toast.error(err.message || 'Unable to save the facilitator coding.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function publishSubmission() {
     if (!selected || !canPublish) return
     setBusy(true)
@@ -159,7 +219,7 @@ export default function ExceptionsQueue({ communitySubmissions = null }) {
           {loading && <p className="queue-state">Loading exceptions…</p>}
           {!loading && !error && items.length === 0 && <p className="queue-state">No exceptions waiting for review.</p>}
           {items.map((item) => (
-            <button key={item.id} className={`queue-item ${selected?.id === item.id ? 'is-selected' : ''}`} onClick={() => { setSelected(item); setNote('') }}>
+            <button key={item.id} className={`queue-item ${selected?.id === item.id ? 'is-selected' : ''}`} onClick={() => { setSelected(item); resetReviewInputs() }}>
               <span className={`flag flag--${item.flagType.toLowerCase()}`}>{item.flagType}</span>
               <strong>{item.sourceRef}</strong>
               <span className="queue-item__status">{item.status}</span>
@@ -186,18 +246,37 @@ export default function ExceptionsQueue({ communitySubmissions = null }) {
                 This item cannot be cleared: {selected.blockedReason}
               </p>
             )}
-            <dl className="evidence-grid">
-              <div><dt>{selected.flagType === 'AI_COULD_NOT_CODE' ? 'Submitted text (de-identified)' : 'Flagged quote'}</dt><dd>{selected.sourceQuote || 'Not available'}</dd></div>
-              <div><dt>Confidence</dt><dd>{selected.confidence == null ? 'Not available' : selected.confidence.toFixed(2)}</dd></div>
-              <div className="evidence-wide"><dt>Source context</dt><dd>{selected.sourceContext || 'No source context available.'}</dd></div>
-            </dl>
+            {needsHumanCoding ? (
+              <IdeaCodingPanel
+                text={selected.sourceQuote}
+                pending={selected.status === 'PENDING'}
+                theme={codedTheme}
+                onThemeChange={setCodedTheme}
+                quote={codedQuote}
+                onQuoteChange={setCodedQuote}
+              />
+            ) : (
+              <dl className="evidence-grid">
+                <div><dt>Flagged quote</dt><dd>{selected.sourceQuote || 'Not available'}</dd></div>
+                <div><dt>Confidence</dt><dd>{selected.confidence == null ? 'Not available' : selected.confidence.toFixed(2)}</dd></div>
+                <div className="evidence-wide"><dt>Source context</dt><dd>{selected.sourceContext || 'No source context available.'}</dd></div>
+              </dl>
+            )}
             {selected.status === 'PENDING' && <>
-              <label className="review-note">Reviewer note<textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional review note" maxLength={500} /><small className="note-hint">Optional to clear. Required to reject.</small></label>
+              <label className="review-note">{needsHumanCoding ? 'Explanation' : 'Reviewer note'}<textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={needsHumanCoding ? 'Why you chose this theme, or why you are rejecting the idea' : 'Optional review note'} maxLength={500} /><small className="note-hint">{needsHumanCoding ? 'Optional when approving. Required to reject.' : 'Optional to clear. Required to reject.'}</small></label>
               <div className="review-actions">
                 <button className="btn btn--secondary" disabled={busy || !note.trim()} title={note.trim() ? '' : 'Add a note to reject'} onClick={() => review('reject')}>Reject</button>
-                <button className="btn btn--primary" disabled={busy || Boolean(selected.blockedReason)} title={selected.blockedReason ? 'This item cannot be cleared' : ''} onClick={() => review('clear')}>Clear for verification</button>
-                {canPublish && (
-                  <button className="btn btn--primary" disabled={busy || Boolean(selected.blockedReason)} title={selected.blockedReason ? 'This item cannot be cleared' : 'Clear this flag and publish the submission'} onClick={clearAndPublish}>Clear &amp; publish</button>
+                {needsHumanCoding ? (
+                  <button className="btn btn--primary" disabled={busy || !canApproveCoding} title={canApproveCoding ? '' : 'Enter a theme and choose a supporting sentence'} onClick={approveWithCoding}>
+                    {canPublish ? 'Approve & publish' : 'Approve with this theme'}
+                  </button>
+                ) : (
+                  <>
+                    <button className="btn btn--primary" disabled={busy || Boolean(selected.blockedReason)} title={selected.blockedReason ? 'This item cannot be cleared' : ''} onClick={() => review('clear')}>Clear for verification</button>
+                    {canPublish && (
+                      <button className="btn btn--primary" disabled={busy || Boolean(selected.blockedReason)} title={selected.blockedReason ? 'This item cannot be cleared' : 'Clear this flag and publish the submission'} onClick={clearAndPublish}>Clear &amp; publish</button>
+                    )}
+                  </>
                 )}
               </div>
             </>}
@@ -211,5 +290,39 @@ export default function ExceptionsQueue({ communitySubmissions = null }) {
         </section>
       </div>
     </main>
+  )
+}
+
+/** Shows the idea and lets the facilitator choose a theme and the sentence that supports it. */
+function IdeaCodingPanel({ text, pending, theme, onThemeChange, quote, onQuoteChange }) {
+  const sentences = ideaSentences(text)
+  return (
+    <div className="idea-coding">
+      <div className="idea-coding__text">
+        <span className="idea-coding__label">Idea (de-identified)</span>
+        <p>{text || 'No idea text available.'}</p>
+      </div>
+      {pending && <>
+        <label className="idea-coding__theme">
+          Theme
+          <input
+            value={theme}
+            onChange={(e) => onThemeChange(e.target.value)}
+            maxLength={MAX_THEME_LENGTH}
+            placeholder="A short theme, e.g. Safety after dark"
+          />
+        </label>
+        <fieldset className="idea-coding__sentences">
+          <legend>Supporting sentence</legend>
+          {sentences.length === 0 && <p className="queue-state">No sentences found in this idea. Reject it with a reason.</p>}
+          {sentences.map((sentence) => (
+            <label key={sentence} className={`idea-coding__sentence ${quote === sentence ? 'is-chosen' : ''}`}>
+              <input type="radio" name="supporting-sentence" checked={quote === sentence} onChange={() => onQuoteChange(sentence)} />
+              <span>{sentence}</span>
+            </label>
+          ))}
+        </fieldset>
+      </>}
+    </div>
   )
 }

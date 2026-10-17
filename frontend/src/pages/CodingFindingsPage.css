@@ -58,3 +58,8 @@
   background: var(--color-danger);
   color: #fff;
 }
+
+.coding-findings-page__facilitator {
+  font-weight: 600;
+  font-size: 0.85rem;
+}

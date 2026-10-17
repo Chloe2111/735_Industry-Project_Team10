@@ -1,4 +1,4 @@
-import { isRenderableFinding } from '../pages/CodingFindingsPage'
+import { isFacilitatorCoded, isRenderableFinding } from '../pages/CodingFindingsPage'
 
 // The live "Community ideas" report shown in Reports received.
 //
@@ -23,11 +23,19 @@ export function groupByTheme(findings) {
     groups.get(key).push(finding)
   }
   return [...groups.entries()]
-    .map(([theme, items]) => ({
-      theme,
-      items: [...items].sort((a, b) => b.confidence - a.confidence),
-      averageConfidence: items.reduce((sum, item) => sum + item.confidence, 0) / items.length,
-    }))
+    .map(([theme, items]) => {
+      // Facilitator-coded quotes have no AI confidence, so they are left out of the average.
+      const aiItems = items.filter((item) => !isFacilitatorCoded(item))
+      return {
+        theme,
+        items: [...aiItems].sort((a, b) => b.confidence - a.confidence)
+          .concat(items.filter((item) => isFacilitatorCoded(item))),
+        averageConfidence: aiItems.length > 0
+          ? aiItems.reduce((sum, item) => sum + item.confidence, 0) / aiItems.length
+          : null,
+        facilitatorCoded: items.length - aiItems.length,
+      }
+    })
     .sort((a, b) => b.items.length - a.items.length || a.theme.localeCompare(b.theme))
 }
 
@@ -50,7 +58,9 @@ export function buildCommunityReportDetail(rawFindings) {
 
   const themes = groupByTheme(findings)
   const ideaCount = new Set(findings.map((finding) => finding.sourceRef)).size
-  const reviewedCount = findings.filter((finding) => finding.flags.length > 0).length
+  const reviewedCount = findings.filter(
+    (finding) => finding.flags.length > 0 || isFacilitatorCoded(finding),
+  ).length
   let quoteNumber = 0
 
   return {
@@ -71,21 +81,30 @@ export function buildCommunityReportDetail(rawFindings) {
       { label: 'Facilitator-reviewed', value: String(reviewedCount) },
     ],
     findingsIntro:
-      'Each theme below lists the de-identified quotes that support it. AI confidence is shown for every quote; quotes the AI flagged were approved by a facilitator before release.',
+      'Each theme below lists the de-identified quotes that support it. AI confidence is shown for AI-coded quotes; quotes the AI flagged were approved by a facilitator, and ideas the AI could not code were coded by a facilitator.',
     withheldFindingsCount: 0,
     findings: themes.map((group, index) => {
-      const flagged = group.items.filter((item) => item.flags.length > 0).length
+      const flagged = group.items.filter((item) => item.flags.length > 0 && !isFacilitatorCoded(item)).length
+      const aiCount = group.items.length - group.facilitatorCoded
+      const parts = []
+      if (aiCount > 0) {
+        parts.push(`AI thematic coding, average confidence ${percent(group.averageConfidence)}.`)
+        parts.push(flagged === 0
+          ? 'No AI-coded quotes needed facilitator review.'
+          : `${flagged} AI-coded quote${flagged === 1 ? ' was' : 's were'} flagged and approved by a facilitator.`)
+      }
+      if (group.facilitatorCoded > 0) {
+        parts.push(`${group.facilitatorCoded} quote${group.facilitatorCoded === 1 ? ' was' : 's were'} coded by a facilitator because the AI could not code ${group.facilitatorCoded === 1 ? 'that idea' : 'those ideas'}.`)
+      }
       return {
         id: `community-theme-${index + 1}`,
         title: group.theme,
         commissioningBody: '[Council 1]',
         deliveredBy: 'Community members, via the VCNITY platform',
-        researchQuestion: 'Ideas shared by community members through “Submit an Idea”.',
+        researchQuestion: 'Ideas shared by community members through \u201cSubmit an Idea\u201d.',
         method:
           'Written ideas submitted in the community portal. Each passed the sensitivity tier gate and de-identification before AI coding.',
-        analysis: `AI thematic coding, average confidence ${percent(group.averageConfidence)}. ${
-          flagged === 0 ? 'No quotes needed facilitator review.' : `${flagged} of ${group.items.length} quote${group.items.length === 1 ? '' : 's'} flagged by the AI and approved by a facilitator.`
-        }`,
+        analysis: parts.join(' '),
         deliverableStatus: 'Complete — all flags resolved by a facilitator',
         sourceCount: group.items.length,
         sources: group.items.map((item) => {
@@ -96,7 +115,8 @@ export function buildCommunityReportDetail(rawFindings) {
             method: 'Submit an Idea',
             quote: item.quote,
             flagged: item.flags.length > 0,
-            aiConfidence: Math.round(item.confidence * 100),
+            codedByFacilitator: isFacilitatorCoded(item),
+            aiConfidence: isFacilitatorCoded(item) ? null : Math.round(item.confidence * 100),
             tier: item.tier,
             themes: [group.theme],
             whyItMatters: item.flags.length > 0
