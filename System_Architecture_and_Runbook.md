@@ -138,6 +138,8 @@ Confidence threshold: `0.75`, in `Grounding.CONFIDENCE_THRESHOLD`. Change it onl
 
 This follows the same stages as the client's *Setup and Testing Runbook*: governance first, then an offline test, then the live model on made-up data, then trying to break the guardrails, then calibration, and only then a small real pilot. Do not skip a stage.
 
+**How this maps to the MVP test weekend.** Step 2 is optional for the team. It is for a new machine or for the client after handover. The **dry run uses the real AI API on synthetic text: Steps 3 and 4**. The **real text run is Step 6**, after Ehud has signed the checklist (Step 1) and the offline de-identification check on the real texts has passed. Calibration (Step 5) can finish after the real run. Until then the threshold stays at 0.75.
+
 Each step has **RUN** (what to do), **EXPECT** (what should happen) and **CHECK** (how you know it worked). Commands are for Windows PowerShell. On macOS/Linux use `npm` instead of `npm.cmd`.
 
 ### Prerequisites
@@ -183,22 +185,26 @@ Then, as Community: Commissions → **Submit an Idea**, choose the group, and en
 **EXPECT** `mvn test` and `npm.cmd test` both pass with no failures. The submission is processed by the mock coder, which gives every finding the theme "General feedback".
 **CHECK** As Facilitator: the item appears in the **Exceptions queue** or goes straight through. As Client: **Reports received** → "Community ideas" shows the finding once it is published.
 
-### Step 3 – Live model on synthetic text
+### Step 3 – Live model on synthetic text (the dry run)
 
-**RUN** Stop the backend, set the key in this terminal only, and restart:
+**RUN** Pull the latest `main` (it must include the JSON reply fix in A7). Start MongoDB. Then set the key and model in this terminal only, and start the backend:
 ```powershell
+git pull
+cd backend
 $env:ANTHROPIC_API_KEY = "<key from the key owner>"   # never commit or paste this anywhere
+$env:ANTHROPIC_MODEL   = "<model agreed with the key owner>"
 $env:FINDINGS_API_ENABLED = "true"
 mvn spring-boot:run
 ```
-Submit 3–5 synthetic ideas through Submit an Idea.
+Start the frontend as in Step 2. As Community, go to **Share feedback → Group tiers**. Classify one test group as **Tier 2** and one as **Tier 3**. (Submit an Idea only lists groups that have a tier. The `PUT /api/intake/group-tiers` command in Step 2 does the same thing.)
+Submit 3–5 synthetic ideas to the Tier 2 group through Submit an Idea. Note each receipt: reference ID, tier and status.
 **EXPECT** Each idea comes back with a real theme and a quote taken from the idea's own text.
-**CHECK** In Coding findings, themes are not empty and quotes match the submitted text. If the backend log shows an HTTP error status, stop and fix that before going on. Close the terminal afterwards so the key is cleared.
+**CHECK** In Coding findings, themes are not empty and quotes match the submitted text. For flagged items, the facilitator uses **Clear & publish** or **Reject** in the Exceptions queue. Client → Reports received → **Community ideas** shows the published ones. If the backend log shows an HTTP error status, stop and fix that before going on. Close the terminal afterwards so the key is cleared.
 
 ### Step 4 – Break the guardrails on purpose
 
 **RUN**
-- Set a group to Tier 3, and leave another group with no tier. Submit an idea to each.
+- Submit an idea to the Tier 3 group from Step 3. It is still the live AI setup; the point is that the AI is never called. Untiered groups do not appear in Submit an Idea, so test them with `mvn test -Dtest=GuardrailBreakTest` (below).
 - Submit text with nothing to code (for example "ok"). Submit text that contains a made-up full name.
 - Run the automated break tests: `mvn test -Dtest=GuardrailBreakTest` (see `docs/Story26_Guardrail_Break_Tests.md`).
 
@@ -207,17 +213,22 @@ Submit 3–5 synthetic ideas through Submit an Idea.
 - Nothing to code: appears in the queue as **AI could not code**. The facilitator can code it, and the report shows "Coded by facilitator".
 - Full name: replaced before coding. It does not appear in any finding.
 
-**CHECK** All break tests pass. No refused text appears in Coding findings or Reports received.
+**CHECK** All break tests pass. No refused text appears in Coding findings or Reports received. With the live AI, the "nothing to code" item may still get a weak theme instead of AI could not code. If so, it should be flagged for low confidence. Either result is acceptable, so record which one happened.
 
 ### Step 5 – Calibrate
 
 **RUN** The calibration owner runs the labelled calibration set through the live path and compares AI themes and confidence with the human coding (Story 25).
-**EXPECT** An agreed confidence threshold (the current value is 0.75) and any prompt changes, written up.
+**EXPECT** An agreed confidence threshold (the current value is 0.75) and any prompt changes, written up. This can happen after the first real run. Until it is agreed, keep 0.75 and say so in the results.
 **CHECK** Only after this is agreed should `Grounding.CONFIDENCE_THRESHOLD` or the prompt change, through a reviewed PR.
 
 ### Step 6 – Small real pilot (only after sign-off)
 
-**RUN** Only when Step 1 is signed off and an offline de-identification check on the real text has passed: run a small batch of real text submissions on one machine with local MongoDB. A facilitator then clears, rejects or codes every queued item.
+**RUN** Only when Step 1 is signed off and an offline de-identification check on the real text has passed (de-identification run over the chosen texts, every change logged, and a second person reads every line). Use the same live setup as Step 3, on one machine with local MongoDB:
+1. Community: Submit an Idea → Tier 2 group → real idea text. Note the receipt.
+2. MongoDB: check that the stored text and the finding have names, dates and ages redacted.
+3. Facilitator: for flagged items, Clear & publish, Reject, or code it yourself.
+4. Client: in Reports received → Community ideas, check the theme and de-identified quote appear. Rejected items must not appear.
+5. Submit one idea to the Tier 3 group and check it never reaches the AI or the report.
 **EXPECT** Each real item ends up in exactly one place: refused, queued for a person, or published.
 **CHECK** Reports received shows only published, de-identified findings. Record the counts (refused / queued / cleared / rejected / facilitator-coded / published) for the Test & Evaluation report. Screenshots must show de-identified text only.
 
