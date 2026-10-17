@@ -135,7 +135,7 @@ class FindingApiIntegrationTest {
                         .andExpect(header().string(
                                 "Cache-Control", "no-store"
                         ))
-                        .andExpect(jsonPath("$", aMapWithSize(8)))
+                        .andExpect(jsonPath("$", aMapWithSize(9)))
                         .andExpect(jsonPath("$.itemId")
                                 .value(finding.itemId()))
                         .andExpect(jsonPath("$.sourceRef")

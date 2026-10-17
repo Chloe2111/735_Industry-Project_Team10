@@ -152,7 +152,8 @@ public class MongoFindingRepository implements FindingRepository {
                 .append("quote", finding.quote())
                 .append("confidence", finding.confidence())
                 .append("tier", finding.tier())
-                .append("flags", new ArrayList<>(finding.flags()));
+                .append("flags", new ArrayList<>(finding.flags()))
+                .append("codedBy", finding.codedBy());
     }
 
     private CodedFinding fromDocument(Document document) {
@@ -192,7 +193,9 @@ public class MongoFindingRepository implements FindingRepository {
                     document.getString("quote"),
                     document.getDouble("confidence"),
                     document.getInteger("tier"),
-                    document.getList("flags", String.class)
+                    document.getList("flags", String.class),
+                    // Optional: findings saved before it existed have none and were coded by the AI.
+                    document.getString("codedBy")
             );
         } catch (IllegalArgumentException | ClassCastException exception) {
             // Do not expose stored quotations or other content in errors.

@@ -43,10 +43,13 @@
             "description": "Evidence quotation to check against the referenced de-identified transcript."
         },
         "confidence": {
-            "type": "number",
+            "type": [
+                "number",
+                "null"
+            ],
             "minimum": 0,
             "maximum": 1,
-            "description": "Confidence score between 0 and 1 inclusive. This is not human approval."
+            "description": "AI confidence score between 0 and 1 inclusive. This is not human approval. Null only when codedBy is \"facilitator\"."
         },
         "tier": {
             "type": "integer",
@@ -70,6 +73,34 @@
                 ]
             },
             "description": "Recorded check failures. An empty array does not prove that checks ran or that human approval was granted."
+        },
+        "codedBy": {
+            "type": "string",
+            "enum": [
+                "ai",
+                "facilitator"
+            ],
+            "default": "ai",
+            "description": "Who chose the theme and quote. \"facilitator\" means a person coded an idea the AI could not code. Missing means \"ai\" (findings saved before this field existed)."
+        }
+    },
+    "if": {
+        "not": {
+            "properties": {
+                "codedBy": {
+                    "const": "facilitator"
+                }
+            },
+            "required": [
+                "codedBy"
+            ]
+        }
+    },
+    "then": {
+        "properties": {
+            "confidence": {
+                "type": "number"
+            }
         }
     },
     "$defs": {

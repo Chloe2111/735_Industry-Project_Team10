@@ -156,11 +156,41 @@ If the AI call fails, its answer is unusable, or it finds no themes, the submiss
 
 - stores only the de-identified text, with status `PENDING_REVIEW` (receipt: "will be checked by a person");
 - raises one queue item with the flag `AI_COULD_NOT_CODE`, whose evidence is that de-identified text;
-- never publishes it automatically. A facilitator rejects it with a reason, or clears it and publishes it,
-  exactly like any other flag. The item is restored after a restart like any other.
+- never publishes it automatically. A facilitator rejects it with a reason, or codes it themselves (below)
+  and then publishes it. The item is restored after a restart like any other.
 
 Storage failures (MongoDB) still refuse the submission with a 503, because nothing could be saved safely.
 Tests: `AiCouldNotCodeTest` (real pipeline, scripted AI) and `DefaultPipelineRunnerTest`.
+
+### A facilitator codes it: `PATCH /api/exceptions/{id}/code`
+
+Body: `{ "theme": "Lighting and safety", "quote": "More lights near the bus stop would help.", "note": "optional" }`
+
+`FacilitatorCodingService` (in `intake`, because it needs the submission and its tier):
+
+1. checks the item has the flag `AI_COULD_NOT_CODE`, is still pending and belongs to a community submission;
+2. checks the theme (required, 80 characters or fewer) and the note (500 or fewer);
+3. checks the submission is not held and its group is Tier 1 or 2, at intake and now;
+4. checks the quote is copied **exactly** from the stored, de-identified idea text. A quote that was changed,
+   invented, or that puts back a removed name is refused;
+5. saves a finding with `codedBy: "facilitator"`, no confidence, no speaker code, `sourceRef` = the submission id
+   (so the reports find it once it is published) and id `facilitator-<queue item id>`;
+6. clears the queue item with the note. Like every clear, this does **not** publish: the screen then calls
+   `POST /api/intake/submissions/{id}/publish`.
+
+| Status | When |
+|---|---|
+| 200 | Coded and cleared. Body: the queue item (status `CLEARED`). Sending the same coding again also returns 200 |
+| 400 | Not an `AI_COULD_NOT_CODE` item, theme missing or too long, quote not in the idea, note too long |
+| 404 | No queue item with this id |
+| 409 | Already reviewed (with different coding), or the submission is held or its group is Tier 3 |
+
+All checks run before anything is saved. Reports only show findings of published submissions, so if the clear
+fails after the save (a rare race), nothing appears anywhere and sending the same coding again finishes the job.
+
+`CodedFinding` has an optional `codedBy` (`"ai"` or `"facilitator"`). Older findings without it read as `"ai"`,
+and only a facilitator finding may have no confidence. See `docs/CodedFinding.schema.json`.
+Tests: `FacilitatorCodingTest` (real intake and queue) and `FacilitatorCodingControllerTest` (HTTP statuses).
 
 ## Sharing the exceptions queue
 

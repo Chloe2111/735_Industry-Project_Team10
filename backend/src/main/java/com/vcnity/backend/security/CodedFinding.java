@@ -8,6 +8,10 @@ import java.util.Set;
  *
  * Empty flags mean no failures have been recorded.
  * They do not prove grounding has run or grant final approval.
+ *
+ * codedBy says who chose the theme and quote: "ai" (the pipeline) or "facilitator"
+ * (a person coded an idea the AI could not code). Only a facilitator-coded finding may
+ * have no confidence, because there is no AI score for it.
  */
 public record CodedFinding(
         String itemId,
@@ -17,8 +21,12 @@ public record CodedFinding(
         String quote,
         Double confidence,
         Integer tier,
-        List<String> flags
+        List<String> flags,
+        String codedBy
 ) {
+
+    public static final String CODED_BY_AI = "ai";
+    public static final String CODED_BY_FACILITATOR = "facilitator";
 
     private static final Set<String> SUPPORTED_FLAGS = Set.of(
             "quoteNotGrounded",
@@ -28,7 +36,30 @@ public record CodedFinding(
             "tierViolation"
     );
 
+    /** An AI-coded finding. Every existing caller uses this, so nothing else had to change. */
+    public CodedFinding(String itemId, String sourceRef, String speakerCode, String theme, String quote,
+                        Double confidence, Integer tier, List<String> flags) {
+        this(itemId, sourceRef, speakerCode, theme, quote, confidence, tier, flags, CODED_BY_AI);
+    }
+
+    /** A finding a facilitator coded by hand: no speaker code, no AI confidence, no flags. */
+    public static CodedFinding codedByFacilitator(String itemId, String sourceRef, String theme,
+                                                  String quote, Integer tier) {
+        return new CodedFinding(itemId, sourceRef, null, theme, quote, null, tier, List.of(),
+                CODED_BY_FACILITATOR);
+    }
+
     public CodedFinding {
+        // Records saved before codedBy existed were all coded by the AI.
+        if (codedBy == null) {
+            codedBy = CODED_BY_AI;
+        }
+        if (!CODED_BY_AI.equals(codedBy) && !CODED_BY_FACILITATOR.equals(codedBy)) {
+            throw new IllegalArgumentException(
+                    "codedBy must be \"ai\" or \"facilitator\""
+            );
+        }
+
         requireText(itemId, "itemId");
         requireText(sourceRef, "sourceRef");
         requireText(theme, "theme");
@@ -40,10 +71,11 @@ public record CodedFinding(
             );
         }
 
-        if (confidence == null
+        boolean noScoreAllowed = CODED_BY_FACILITATOR.equals(codedBy) && confidence == null;
+        if (!noScoreAllowed && (confidence == null
                 || !Double.isFinite(confidence)
                 || confidence < 0.0
-                || confidence > 1.0) {
+                || confidence > 1.0)) {
             throw new IllegalArgumentException(
                     "confidence must be a finite number between 0 and 1"
             );
@@ -98,7 +130,8 @@ public record CodedFinding(
                 quote,
                 confidence,
                 tier,
-                checkedFlags
+                checkedFlags,
+                codedBy
         );
     }
 
