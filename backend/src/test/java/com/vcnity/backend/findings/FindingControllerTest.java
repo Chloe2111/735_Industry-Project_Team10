@@ -53,7 +53,7 @@ class FindingControllerTest {
         mvc.perform(get("/api/findings/{itemId}", finding.itemId()))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))
-                .andExpect(jsonPath("$", aMapWithSize(8)))
+                .andExpect(jsonPath("$", aMapWithSize(9)))
                 .andExpect(jsonPath("$.itemId").value(finding.itemId()))
                 .andExpect(jsonPath("$.sourceRef").value(finding.sourceRef()))
                 .andExpect(jsonPath("$.speakerCode").value(nullValue()))
@@ -61,7 +61,8 @@ class FindingControllerTest {
                 .andExpect(jsonPath("$.quote").value(finding.quote()))
                 .andExpect(jsonPath("$.confidence").value(0.95))
                 .andExpect(jsonPath("$.tier").value(2))
-                .andExpect(jsonPath("$.flags").isEmpty());
+                .andExpect(jsonPath("$.flags").isEmpty())
+                .andExpect(jsonPath("$.codedBy").value("ai"));
     }
 
     @Test
