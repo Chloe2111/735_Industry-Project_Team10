@@ -7,6 +7,12 @@ import {
   recentActivity,
 } from '../data/portalSeed'
 import { apiClient, ApiError } from './apiClient'
+import { listFindings } from './findingsService'
+import {
+  COMMUNITY_REPORT_ID,
+  buildCommunityReportDetail,
+  buildCommunityReportSummary,
+} from './communityReport'
 
 // In-memory store standing in for the real backend, which doesn't have
 // listing/dashboard endpoints yet (createCommission/suggestGroups/reports
@@ -116,11 +122,31 @@ export function suggestGroups(answers) {
 // backed by MongoDB, seeded with synthetic content since the AI pipeline
 // doesn't produce real report content yet.
 export async function listReports() {
-  const reports = await apiClient.get('/reports')
-  return { data: reports }
+  // Seeded reports and the live "Community ideas" report load independently,
+  // so one failing does not hide the other. `warnings` says what could not load.
+  const [stored, findings] = await Promise.allSettled([apiClient.get('/reports'), listFindings()])
+  if (stored.status === 'rejected' && findings.status === 'rejected') throw stored.reason
+
+  const reports = []
+  const warnings = []
+  if (findings.status === 'fulfilled') {
+    reports.push(buildCommunityReportSummary(findings.value.data ?? []))
+  } else {
+    warnings.push(`Community ideas could not be loaded: ${findings.reason?.message ?? 'unknown error'}`)
+  }
+  if (stored.status === 'fulfilled') {
+    reports.push(...(Array.isArray(stored.value) ? stored.value : []))
+  } else {
+    warnings.push(stored.reason?.message ?? 'Could not load reports.')
+  }
+  return { data: reports, warnings }
 }
 
 export async function getReport(id) {
+  if (id === COMMUNITY_REPORT_ID) {
+    const { data } = await listFindings()
+    return { data: buildCommunityReportDetail(data ?? []) }
+  }
   try {
     const report = await apiClient.get(`/reports/${id}`)
     return { data: report }

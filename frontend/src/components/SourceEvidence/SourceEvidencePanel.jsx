@@ -44,15 +44,25 @@ function SourceList({ sources, onSelect, onClose }) {
               <span className="source-evidence__type-badge">{source.type}</span>
               <span className="source-evidence__id">{source.id}</span>
               {source.flagged && <span className="source-evidence__flagged-badge">AI flagged</span>}
-              <span className="source-evidence__agree-percent">{source.agreementPercent}% agree</span>
+              {source.agreementPercent != null ? (
+                <span className="source-evidence__agree-percent">{source.agreementPercent}% agree</span>
+              ) : (
+                source.aiConfidence != null && (
+                  <span className="source-evidence__agree-percent">{source.aiConfidence}% AI confidence</span>
+                )
+              )}
             </div>
             <p className="source-evidence__quote">&ldquo;{source.quote}&rdquo;</p>
-            <div className="source-evidence__bar">
-              <div className="source-evidence__bar-fill" style={{ width: `${source.agreementPercent}%` }} />
-            </div>
+            {source.agreementPercent != null && (
+              <div className="source-evidence__bar">
+                <div className="source-evidence__bar-fill" style={{ width: `${source.agreementPercent}%` }} />
+              </div>
+            )}
             <div className="source-evidence__card-footer">
               <span>
-                {source.participantsAgreed} of {source.participantsTotal} participants &middot; {source.method}
+                {source.participantsTotal != null
+                  ? `${source.participantsAgreed} of ${source.participantsTotal} participants \u00b7 ${source.method}`
+                  : source.method}
               </span>
               <button type="button" className="source-evidence__view-detail" onClick={() => onSelect(source.id)}>
                 View detail &rarr;
@@ -84,6 +94,18 @@ function SourceDetail({ source, onBack }) {
         <p className="source-evidence__quote source-evidence__quote--large">&ldquo;{source.quote}&rdquo;</p>
       </div>
 
+      {source.agreementPercent == null && source.aiConfidence != null && (
+        <section className="source-evidence__section">
+          <h3>AI confidence</h3>
+          <div className="source-evidence__big-percent">{source.aiConfidence}%</div>
+          <p className="source-evidence__meter-caption">
+            How sure the AI was that this quote supports the theme.
+            {source.flagged ? ' The AI flagged it, so a facilitator reviewed and approved it before release.' : ''}
+          </p>
+        </section>
+      )}
+
+      {source.agreementPercent != null && (
       <section className="source-evidence__section">
         <h3>Agreement across group</h3>
         <div className="source-evidence__big-percent">{source.agreementPercent}%</div>
@@ -95,7 +117,9 @@ function SourceDetail({ source, onBack }) {
           related view across the engagement.
         </p>
       </section>
+      )}
 
+      {source.genderBreakdown && (
       <section className="source-evidence__section">
         <h3>Who shared this view</h3>
         <span className="source-evidence__sub-label">Age range</span>
@@ -123,6 +147,7 @@ function SourceDetail({ source, onBack }) {
           ))}
         </div>
       </section>
+      )}
 
       <section className="source-evidence__section">
         <h3>Why this matters for the report</h3>
