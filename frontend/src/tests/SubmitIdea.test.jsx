@@ -10,10 +10,10 @@ vi.mock('../services/intakeApi', () => ({
   submitFeedback: vi.fn(),
 }))
 
-function renderForm(onNavigate = vi.fn()) {
+function renderForm(onNavigate = vi.fn(), commission) {
   render(
     <ToastProvider>
-      <SubmitIdea onNavigate={onNavigate} />
+      <SubmitIdea onNavigate={onNavigate} commission={commission} />
     </ToastProvider>,
   )
   return onNavigate
@@ -86,5 +86,32 @@ describe('SubmitIdea (sent to intake)', () => {
 
     expect(await screen.findByText('This group has not been classified yet.')).toBeInTheDocument()
     expect(onNavigate).not.toHaveBeenCalledWith('success', expect.anything())
+  })
+
+  it('links the idea to a commission a client posted', async () => {
+    const user = userEvent.setup()
+    submitFeedback.mockResolvedValue({ id: 'sub-2', status: 'PUBLISHED', tier: 2 })
+    const commission = { id: 'c-123', source: 'client', title: 'TEST - Riverside shade and seating ideas' }
+    renderForm(vi.fn(), commission)
+    expect(screen.getByRole('heading', { level: 1, name: 'Submit an Idea' })).toBeInTheDocument()
+    expect(screen.getAllByText('TEST - Riverside shade and seating ideas').length).toBeGreaterThan(0)
+    await screen.findByRole('option', { name: /Riverside Youth/ })
+    await fillRequired(user)
+
+    await user.click(screen.getByRole('button', { name: /Submit Idea/ }))
+
+    expect(submitFeedback).toHaveBeenCalledWith(expect.objectContaining({ commissionId: 'c-123', groupIds: ['riverside youth'] }))
+  })
+
+  it('does not send a commission for the sample commissions', async () => {
+    const user = userEvent.setup()
+    submitFeedback.mockResolvedValue({ id: 'sub-3', status: 'PUBLISHED', tier: 2 })
+    renderForm(vi.fn(), { id: 'sample-riverside-spaces', source: 'sample', title: 'Riverside Public Spaces' })
+    await screen.findByRole('option', { name: /Riverside Youth/ })
+    await fillRequired(user)
+
+    await user.click(screen.getByRole('button', { name: /Submit Idea/ }))
+
+    expect(submitFeedback.mock.calls[0][0]).not.toHaveProperty('commissionId')
   })
 })

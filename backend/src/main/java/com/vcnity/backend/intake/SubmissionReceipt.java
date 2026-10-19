@@ -10,6 +10,12 @@ public record SubmissionReceipt(
         Integer tier,
         List<String> groupIds,
         String message,
-        Instant submittedAt
+        Instant submittedAt,
+        String commissionId
 ) {
+
+    public SubmissionReceipt(String id, SubmissionStatus status, Integer tier, List<String> groupIds,
+                             String message, Instant submittedAt) {
+        this(id, status, tier, groupIds, message, submittedAt, null);
+    }
 }

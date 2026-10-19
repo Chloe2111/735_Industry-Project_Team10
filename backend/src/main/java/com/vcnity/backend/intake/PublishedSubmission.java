@@ -12,6 +12,11 @@ public record PublishedSubmission(
         List<String> groupIds,
         String text,
         Integer tier,
-        Instant submittedAt
+        Instant submittedAt,
+        String commissionId
 ) {
+
+    public PublishedSubmission(String id, List<String> groupIds, String text, Integer tier, Instant submittedAt) {
+        this(id, groupIds, text, tier, submittedAt, null);
+    }
 }

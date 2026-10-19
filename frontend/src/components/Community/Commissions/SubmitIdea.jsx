@@ -4,6 +4,7 @@ import CommunityHeader, { ChatButton } from "../CommunityHeader";
 import { listGroupTiers, submitFeedback } from "../../../services/intakeApi";
 import { tierName } from "../../../constants/tiers";
 import { useToast } from "../../Toast/ToastProvider";
+import { SAMPLE_COMMISSIONS } from "../../../services/openCommissions";
 
 /**
  * The idea is sent to intake as one text, with each answer labelled, so the
@@ -23,7 +24,7 @@ export function buildIdeaText(formData) {
     .join("\n");
 }
 
-export default function SubmitIdea({ onNavigate }) {
+export default function SubmitIdea({ onNavigate, commission = SAMPLE_COMMISSIONS[0] }) {
   const toast = useToast();
   const [groups, setGroups] = useState([]);
   const [groupsError, setGroupsError] = useState("");
@@ -142,10 +143,15 @@ export default function SubmitIdea({ onNavigate }) {
 
     setSubmitting(true);
     try {
-      const receipt = await submitFeedback({
+      const payload = {
         groupIds: [formData.groupId],
         text: buildIdeaText(formData),
-      });
+      };
+      // Only commissions a client posted exist in the database; sample ones are not linked.
+      if (commission?.source === "client" && commission.id) {
+        payload.commissionId = commission.id;
+      }
+      const receipt = await submitFeedback(payload);
       onNavigate("success", { receipt, title: formData.title.trim() });
     } catch (error) {
       toast.error(error.message || "Could not submit your idea. Please try again.");
@@ -160,7 +166,7 @@ export default function SubmitIdea({ onNavigate }) {
 
   return (
     <div className="commission-page">
-      <CommunityHeader active="commissions" onNavigate={onNavigate} crumbs={["Commissions", "Skate Park Design Consultation", "Submit an Idea"]} />
+      <CommunityHeader active="commissions" onNavigate={onNavigate} crumbs={["Commissions", commission.title, "Submit an Idea"]} />
 
       <main className="commission-layout">
         <CommunitySidebar onNavigate={onNavigate} />
@@ -177,7 +183,7 @@ export default function SubmitIdea({ onNavigate }) {
 
             <h1>Submit an Idea</h1>
             <p className="organisation-large">
-              Skate Park Design Consultation
+              {commission.title}
             </p>
 
             <div className="submission-info">

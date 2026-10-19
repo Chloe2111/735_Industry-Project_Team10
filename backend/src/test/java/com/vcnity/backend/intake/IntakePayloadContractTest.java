@@ -60,7 +60,7 @@ class IntakePayloadContractTest {
 
         JsonNode json = mapper.valueToTree(app.submit("Great session.", "youth group a"));
 
-        assertEquals(List.of("groupIds", "id", "message", "status", "submittedAt", "tier"), fieldNames(json));
+        assertEquals(List.of("commissionId", "groupIds", "id", "message", "status", "submittedAt", "tier"), fieldNames(json));
         assertEquals("PUBLISHED", json.get("status").asText());
         assertEquals(2, json.get("tier").asInt());
         assertEquals("youth group a", json.get("groupIds").get(0).asText());
@@ -96,7 +96,45 @@ class IntakePayloadContractTest {
 
         JsonNode published = mapper.valueToTree(app.intake.listPublished("youth group a")).get(0);
 
-        assertEquals(List.of("groupIds", "id", "submittedAt", "text", "tier"), fieldNames(published));
+        assertEquals(List.of("commissionId", "groupIds", "id", "submittedAt", "text", "tier"), fieldNames(published));
         assertEquals("Great session.", published.get("text").asText());
+    }
+
+    @Test
+    void anIdeaSentFromACommissionCarriesTheCommissionThroughToThePublishedRecord() throws Exception {
+        IntakeFixture app = new IntakeFixture();
+        app.classify("youth group a", 2);
+        String formPayload = "{\"groupIds\":[\"youth group a\"],\"text\":\"More shade please.\",\"commissionId\":\" c-123 \"}";
+
+        SubmissionReceipt receipt = app.intake.submit(mapper.readValue(formPayload, SubmissionRequest.class));
+
+        assertEquals("c-123", receipt.commissionId());
+        assertEquals("c-123", app.stored(receipt.id()).getCommissionId());
+        assertEquals("c-123", app.intake.listPublished("youth group a").get(0).commissionId());
+    }
+
+    @Test
+    void feedbackWithoutACommissionStillWorks() throws Exception {
+        IntakeFixture app = new IntakeFixture();
+        app.classify("youth group a", 2);
+        String formPayload = "{\"groupIds\":[\"youth group a\"],\"text\":\"General feedback.\",\"commissionId\":\"  \"}";
+
+        SubmissionReceipt receipt = app.intake.submit(mapper.readValue(formPayload, SubmissionRequest.class));
+
+        assertNull(receipt.commissionId());
+        assertEquals(SubmissionStatus.PUBLISHED, receipt.status());
+    }
+
+    @Test
+    void aTier3IdeaKeepsItsCommissionButIsStillHeld() throws Exception {
+        IntakeFixture app = new IntakeFixture();
+        app.classify("elders circle", 3);
+        String formPayload = "{\"groupIds\":[\"elders circle\"],\"text\":\"Restricted story.\",\"commissionId\":\"c-123\"}";
+
+        SubmissionReceipt receipt = app.intake.submit(mapper.readValue(formPayload, SubmissionRequest.class));
+
+        assertEquals(SubmissionStatus.HELD, receipt.status());
+        assertEquals("c-123", receipt.commissionId());
+        assertTrue(app.pipeline.calls.isEmpty(), "Tier 3 never reaches the pipeline");
     }
 }

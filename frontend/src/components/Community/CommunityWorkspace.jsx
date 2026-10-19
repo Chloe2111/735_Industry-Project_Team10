@@ -41,6 +41,7 @@ export default function CommunityWorkspace() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [lastIdea, setLastIdea] = useState(null);
+  const [selectedCommission, setSelectedCommission] = useState(undefined);
   const toast = useToast();
 
   // Loads groups, the activity feed and this member's groups together.
@@ -79,6 +80,7 @@ export default function CommunityWorkspace() {
   function navigateTo(page, payload) {
     if (page === "groupView" && payload) setSelectedGroup(payload);
     if (page === "success") setLastIdea(payload ?? null);
+    if ((page === "details" || page === "submit") && payload) setSelectedCommission(payload);
     setCurrentPage(page);
     window.scrollTo(0, 0);
   }
@@ -154,9 +156,9 @@ export default function CommunityWorkspace() {
     case "messages": return <Messages {...common} />;
     case "profile": return <Profile {...common} />;
     case "commissions": return <OpenCommissions {...common} />;
-    case "details": return <CommissionDetails {...common} />;
-    case "submit": return <SubmitIdea {...common} />;
-    case "success": return <SubmissionSuccess {...common} submission={lastIdea} />;
+    case "details": return <CommissionDetails {...common} commission={selectedCommission} />;
+    case "submit": return <SubmitIdea {...common} commission={selectedCommission} />;
+    case "success": return <SubmissionSuccess {...common} submission={lastIdea} commission={selectedCommission} />;
     // Story 24 share-feedback form, shown under the community nav so members can get back.
     case "shareFeedback":
       return (

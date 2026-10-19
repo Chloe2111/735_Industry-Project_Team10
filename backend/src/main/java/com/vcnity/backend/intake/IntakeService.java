@@ -47,6 +47,7 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
     public static final String SOURCE_TYPE = "COMMUNITY_SUBMISSION";
 
     static final int MAX_TEXT_LENGTH = 5000;
+    static final int MAX_COMMISSION_ID_LENGTH = 100;
     static final int MAX_GROUPS = 10;
 
     static final String HALTED_REASON =
@@ -106,6 +107,7 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
         Submission submission = new Submission();
         submission.setId(UUID.randomUUID().toString());
         submission.setGroupIds(groupIds);
+        submission.setCommissionId(cleanCommissionId(request));
         submission.setTierAtIntake(tier);
         submission.setSubmittedAt(now);
         submission.setUpdatedAt(now);
@@ -203,7 +205,8 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
         return published.stream()
                 .filter(s -> !isTier3AtIntake(s))
                 .filter(s -> s.getGroupIds().stream().noneMatch(restrictedNow::contains))
-                .map(s -> new PublishedSubmission(s.getId(), s.getGroupIds(), s.getText(), s.getTierAtIntake(), s.getSubmittedAt()))
+                .map(s -> new PublishedSubmission(s.getId(), s.getGroupIds(), s.getText(), s.getTierAtIntake(), s.getSubmittedAt(),
+                        s.getCommissionId()))
                 .toList();
     }
 
@@ -584,6 +587,16 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
         return new ArrayList<>(ids);
     }
 
+    /** Optional. Blank means the feedback does not answer a particular commission. */
+    private static String cleanCommissionId(SubmissionRequest request) {
+        String id = request.commissionId() == null ? "" : request.commissionId().trim();
+        if (id.isEmpty()) return null;
+        if (id.length() > MAX_COMMISSION_ID_LENGTH) {
+            throw new IllegalArgumentException("That commission reference is not valid.");
+        }
+        return id;
+    }
+
     private static String cleanText(SubmissionRequest request) {
         String text = request.text() == null ? "" : request.text().trim();
         if (text.isEmpty()) throw new IllegalArgumentException("Please write your feedback before submitting.");
@@ -600,7 +613,8 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
     private SubmissionReceipt receipt(Submission submission, boolean hiddenByTier) {
         if (hiddenByTier) {
             return new SubmissionReceipt(submission.getId(), SubmissionStatus.HELD, submission.getTierAtIntake(),
-                    submission.getGroupIds(), HIDDEN_BY_TIER3_MESSAGE, submission.getSubmittedAt());
+                    submission.getGroupIds(), HIDDEN_BY_TIER3_MESSAGE, submission.getSubmittedAt(),
+                    submission.getCommissionId());
         }
         String message = switch (submission.getStatus()) {
             case PUBLISHED -> "Thank you. Your feedback has been published to the group."
@@ -618,6 +632,7 @@ public class IntakeService implements ExceptionReviewListener, ExceptionSourceVa
                 submission.getTierAtIntake(),
                 submission.getGroupIds(),
                 message,
-                submission.getSubmittedAt());
+                submission.getSubmittedAt(),
+                submission.getCommissionId());
     }
 }
