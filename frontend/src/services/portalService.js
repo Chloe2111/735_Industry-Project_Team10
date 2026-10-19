@@ -15,7 +15,7 @@ import {
 } from './communityReport'
 
 // In-memory store standing in for the real backend, which doesn't have
-// listing/dashboard endpoints yet (createCommission/suggestGroups/reports
+// listing/dashboard endpoints yet (listCommissions/createCommission/suggestGroups/reports
 // below are wired to real endpoints). Each function resolves `{ data }`
 // like apiClient so swapping the rest over later is a one-line change.
 // Commission drafts are kept in the browser (localStorage) so they survive a
@@ -59,26 +59,42 @@ export function getDashboardSummary() {
   return resolveAfterDelay({ stats: dashboardStats, activity: recentActivity })
 }
 
-export function listCommissions() {
-  return resolveAfterDelay(state.commissions)
+function toCommissionRow(commission, fallback = {}) {
+  return {
+    id: commission.id,
+    title: commission.title ?? fallback.title,
+    assignedGroup: commission.assignedGroup ?? null,
+    incentive: commission.incentive ?? fallback.incentive,
+    tier: commission.tier ?? null,
+    status: commission.status ?? 'OPEN',
+  }
 }
 
-// Real endpoint (see backend/src/main/java/com/vcnity/backend/commission) --
-// unlike the rest of this file, not backed by the in-memory mock store.
+/**
+ * Commissions saved in the database (GET /api/commissions, newest first),
+ * followed by the sample commissions that the rest of the demo data refers to.
+ * If the backend can't be reached, the sample list (plus anything posted in this
+ * session) is shown instead, so the page still renders.
+ */
+export async function listCommissions() {
+  let saved = []
+  try {
+    const data = await apiClient.get('/commissions')
+    saved = Array.isArray(data) ? data.filter((item) => item?.id).map((item) => toCommissionRow(item)) : []
+  } catch {
+    saved = []
+  }
+  const savedIds = new Set(saved.map((item) => item.id))
+  return { data: [...saved, ...state.commissions.filter((item) => !savedIds.has(item.id))] }
+}
+
+// Real endpoint (see backend/src/main/java/com/vcnity/backend/commission).
 export async function createCommission(payload) {
   const commission = await apiClient.post('/commissions', payload)
-  // listCommissions is still mock-backed, so add the new commission there too;
-  // otherwise it would never show up under My commissions.
+  // Also keep it in this session's list, so it still shows if the list call fails.
   if (commission?.id) {
     state.commissions = [
-      {
-        id: commission.id,
-        title: commission.title ?? payload.title,
-        assignedGroup: commission.assignedGroup ?? null,
-        incentive: commission.incentive ?? payload.incentive,
-        tier: commission.tier ?? null,
-        status: commission.status ?? 'OPEN',
-      },
+      toCommissionRow(commission, payload),
       ...state.commissions.filter((item) => item.id !== commission.id),
     ]
   }
