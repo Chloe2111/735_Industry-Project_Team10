@@ -1,41 +1,26 @@
+import { useEffect, useState } from "react";
 import "./Commissions.css";
+import { SAMPLE_COMMISSIONS, listOpenCommissions } from "../../../services/openCommissions";
 import CommunityHeader, { ChatButton } from "../CommunityHeader";
 
 export default function OpenCommissions({ onNavigate }) {
-  const commissions = [
-    {
-      id: 1,
-      title: "Skate Park Design Consultation",
-      organisation: "Riverside City Council",
-      category: "Community Design",
-      deadline: "31 May 2026",
-      incentive: "$200 Community credit",
-    },
-    {
-      id: 2,
-      title: "Urban Greening Ideas",
-      organisation: "Queensland Government",
-      category: "Sustainability",
-      deadline: "15 Nov 2026",
-      incentive: "$500 Community credit",
-    },
-    {
-      id: 3,
-      title: "Riverside Public Spaces",
-      organisation: "Brisbane City Council",
-      category: "Infrastructure",
-      deadline: "30 Nov 2026",
-      incentive: "$450 Community credit",
-    },
-    {
-      id: 4,
-      title: "Youth Engagement Programs",
-      organisation: "Queensland Government",
-      category: "Social Impact",
-      deadline: "12 Dec 2026",
-      incentive: "$300 Community credit",
-    },
-  ];
+  const [commissions, setCommissions] = useState(SAMPLE_COMMISSIONS);
+  const [loadError, setLoadError] = useState("");
+  const [category, setCategory] = useState("all");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    listOpenCommissions({ signal: controller.signal })
+      .then((result) => {
+        setCommissions(result.commissions);
+        setLoadError(result.loadError);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+
+  const categories = [...new Set(commissions.map((commission) => commission.category))];
+  const shown = category === "all" ? commissions : commissions.filter((commission) => commission.category === category);
 
   return (
     <div className="commission-page">
@@ -54,17 +39,23 @@ export default function OpenCommissions({ onNavigate }) {
               </p>
             </div>
 
-            <select className="category-filter" defaultValue="all">
+            <select
+              className="category-filter"
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+              aria-label="Category"
+            >
               <option value="all">All categories</option>
-              <option>Community Design</option>
-              <option>Sustainability</option>
-              <option>Infrastructure</option>
-              <option>Social Impact</option>
+              {categories.map((name) => (
+                <option key={name}>{name}</option>
+              ))}
             </select>
           </div>
 
+          {loadError && <p className="form-error">{loadError}</p>}
+
           <div className="commission-list">
-            {commissions.map((commission) => (
+            {shown.map((commission) => (
               <article className="commission-card" key={commission.id}>
                 <div className="commission-card-top">
                   <div>
@@ -102,7 +93,7 @@ export default function OpenCommissions({ onNavigate }) {
                 <button
                   className="black-button"
                   type="button"
-                  onClick={() => onNavigate("details")}
+                  onClick={() => onNavigate("details", commission)}
                 >
                   View &amp; participate →
                 </button>

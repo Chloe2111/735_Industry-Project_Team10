@@ -12,6 +12,8 @@ import {
   COMMUNITY_REPORT_ID,
   buildCommunityReportDetail,
   buildCommunityReportSummary,
+  commissionIdFromReportId,
+  splitByCommission,
 } from './communityReport'
 
 // In-memory store standing in for the real backend, which doesn't have
@@ -137,16 +139,32 @@ export function suggestGroups(answers) {
 // Real endpoints (see backend/src/main/java/com/vcnity/backend/report) --
 // backed by MongoDB, seeded with synthetic content since the AI pipeline
 // doesn't produce real report content yet.
+async function loadSavedCommissions() {
+  const data = await apiClient.get('/commissions')
+  return Array.isArray(data) ? data.filter((item) => item?.id) : []
+}
+
 export async function listReports() {
-  // Seeded reports and the live "Community ideas" report load independently,
+  // Seeded reports and the live community reports load independently,
   // so one failing does not hide the other. `warnings` says what could not load.
-  const [stored, findings] = await Promise.allSettled([apiClient.get('/reports'), listFindings()])
+  const [stored, findings, commissions] = await Promise.allSettled([
+    apiClient.get('/reports'),
+    listFindings(),
+    loadSavedCommissions(),
+  ])
   if (stored.status === 'rejected' && findings.status === 'rejected') throw stored.reason
 
   const reports = []
   const warnings = []
   if (findings.status === 'fulfilled') {
-    reports.push(buildCommunityReportSummary(findings.value.data ?? []))
+    // Without the commission list, every idea is shown in the general report.
+    const saved = commissions.status === 'fulfilled' ? commissions.value : []
+    const { byCommission, general } = splitByCommission(findings.value.data ?? [], saved)
+    reports.push(buildCommunityReportSummary(general))
+    // One row per commission this client posted: Final once an idea is published, Draft until then.
+    for (const commission of saved) {
+      reports.push(buildCommunityReportSummary(byCommission.get(commission.id) ?? [], commission))
+    }
   } else {
     warnings.push(`Community ideas could not be loaded: ${findings.reason?.message ?? 'unknown error'}`)
   }
@@ -159,9 +177,16 @@ export async function listReports() {
 }
 
 export async function getReport(id) {
-  if (id === COMMUNITY_REPORT_ID) {
-    const { data } = await listFindings()
-    return { data: buildCommunityReportDetail(data ?? []) }
+  const commissionId = commissionIdFromReportId(id)
+  if (id === COMMUNITY_REPORT_ID || commissionId) {
+    const [{ data }, saved] = await Promise.all([
+      listFindings(),
+      loadSavedCommissions().catch(() => []),
+    ])
+    const { byCommission, general } = splitByCommission(data ?? [], saved)
+    if (!commissionId) return { data: buildCommunityReportDetail(general) }
+    const commission = saved.find((item) => item.id === commissionId)
+    return { data: commission ? buildCommunityReportDetail(byCommission.get(commissionId) ?? [], commission) : null }
   }
   try {
     const report = await apiClient.get(`/reports/${id}`)

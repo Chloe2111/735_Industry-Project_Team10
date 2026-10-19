@@ -25,6 +25,8 @@ public class Submission {
      * the pipeline and no endpoint returns it.
      */
     private String text;
+    /** The client commission this idea answers, or null for general feedback. */
+    private String commissionId;
     private Integer tierAtIntake;
     private SubmissionStatus status;
     /** Plain-language reason for the current status, when it is not simply "published". */
@@ -48,6 +50,7 @@ public class Submission {
         c.id = id;
         c.groupIds = new ArrayList<>(groupIds);
         c.text = text;
+        c.commissionId = commissionId;
         c.tierAtIntake = tierAtIntake;
         c.status = status;
         c.statusReason = statusReason;
@@ -66,6 +69,8 @@ public class Submission {
     public void setGroupIds(List<String> groupIds) { this.groupIds = groupIds == null ? new ArrayList<>() : new ArrayList<>(groupIds); }
     public String getText() { return text; }
     public void setText(String text) { this.text = text; }
+    public String getCommissionId() { return commissionId; }
+    public void setCommissionId(String commissionId) { this.commissionId = commissionId; }
     public Integer getTierAtIntake() { return tierAtIntake; }
     public void setTierAtIntake(Integer tierAtIntake) { this.tierAtIntake = tierAtIntake; }
     public SubmissionStatus getStatus() { return status; }

@@ -1,6 +1,7 @@
 import { CommunitySidebar } from "./OpenCommissions";
 import CommunityHeader, { ChatButton } from "../CommunityHeader";
 import { tierName } from "../../../constants/tiers";
+import { SAMPLE_COMMISSIONS } from "../../../services/openCommissions";
 
 const STATUS_LABELS = {
   PUBLISHED: "Published",
@@ -15,7 +16,7 @@ function formatWhen(value) {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-export default function SubmissionSuccess({ onNavigate, submission = null }) {
+export default function SubmissionSuccess({ onNavigate, submission = null, commission = SAMPLE_COMMISSIONS[0] }) {
   const receipt = submission?.receipt ?? null;
   return (
     <div className="commission-page">
@@ -32,12 +33,12 @@ export default function SubmissionSuccess({ onNavigate, submission = null }) {
 
             <p className="success-intro">
               Thank you for contributing to the{" "}
-              <strong>Skate Park Design Consultation.</strong>
+              <strong>{commission.title}.</strong>
             </p>
 
             <p>
-              Your idea has been received and will be reviewed by Riverside
-              City Council.
+              Your idea has been received and will be reviewed by{" "}
+              {commission.source === "client" ? "the organisation that posted this commission" : commission.organisation}.
             </p>
 
             <div className="submission-details">

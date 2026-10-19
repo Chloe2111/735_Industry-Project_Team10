@@ -58,6 +58,22 @@ describe('findingsService.listFindings (Story 23.2)', () => {
     expect(data.map((f) => f.itemId).sort()).toEqual(['f1', 'f2'])
   })
 
+  it('marks findings with the commission their idea answers', async () => {
+    apiClient.get = fakeBackend({
+      groups: [{ groupId: 'youth-group-a' }],
+      submissionsByGroup: { 'youth-group-a': [{ id: 'sub-1', commissionId: 'c-123' }, { id: 'sub-2', commissionId: null }] },
+      findingsBySource: {
+        'sub-1': [{ findings: [finding('f1', 'sub-1')], hasNext: false }],
+        'sub-2': [{ findings: [finding('f2', 'sub-2')], hasNext: false }],
+      },
+    })
+
+    const { data } = await listFindings()
+
+    expect(data.find((f) => f.itemId === 'f1').commissionId).toBe('c-123')
+    expect(data.find((f) => f.itemId === 'f2')).not.toHaveProperty('commissionId')
+  })
+
   it('dedupes a submission shared by several groups before fetching its findings', async () => {
     const getFindings = vi.fn(async () => ({ findings: [finding('f1', 'sub-1')], hasNext: false }))
     apiClient.get = vi.fn(async (path) => {

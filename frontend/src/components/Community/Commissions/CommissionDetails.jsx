@@ -1,10 +1,12 @@
 import { CommunitySidebar } from "./OpenCommissions";
 import CommunityHeader, { ChatButton } from "../CommunityHeader";
+import { SAMPLE_COMMISSIONS } from "../../../services/openCommissions";
 
-export default function CommissionDetails({ onNavigate }) {
+export default function CommissionDetails({ onNavigate, commission = SAMPLE_COMMISSIONS[0] }) {
+  const isSkatePark = commission.id === SAMPLE_COMMISSIONS[0].id;
   return (
     <div className="commission-page">
-      <CommunityHeader active="commissions" onNavigate={onNavigate} crumbs={["Commissions", "Skate Park Design Consultation"]} />
+      <CommunityHeader active="commissions" onNavigate={onNavigate} crumbs={["Commissions", commission.title]} />
 
       <main className="commission-layout">
         <CommunitySidebar onNavigate={onNavigate} />
@@ -19,33 +21,32 @@ export default function CommissionDetails({ onNavigate }) {
               ← Back to Commissions
             </button>
 
-            <span className="category-badge">Community Design</span>
+            <span className="category-badge">{commission.category}</span>
 
-            <h1>Skate Park Design Consultation</h1>
+            <h1>{commission.title}</h1>
 
             <p className="organisation-large">
-              Riverside City Council
+              {commission.organisation}
             </p>
 
             <p className="intro-text">
-              Help shape a new community skate park by sharing your ideas,
-              experience and suggestions.
+              Share your ideas, experience and suggestions for this commission.
             </p>
 
             <div className="detail-information">
               <div>
                 <span>Closing date</span>
-                <strong>31 May 2026</strong>
+                <strong>{commission.deadline}</strong>
               </div>
 
               <div>
                 <span>Incentive</span>
-                <strong>$200 Community credit</strong>
+                <strong>{commission.incentive}</strong>
               </div>
 
               <div>
                 <span>Organisation</span>
-                <strong>Riverside City Council</strong>
+                <strong>{commission.organisation}</strong>
               </div>
             </div>
 
@@ -53,7 +54,7 @@ export default function CommissionDetails({ onNavigate }) {
               <button
                 className="black-button large-button"
                 type="button"
-                onClick={() => onNavigate("submit")}
+                onClick={() => onNavigate("submit", commission)}
               >
                 Submit an Idea →
               </button>
@@ -66,17 +67,19 @@ export default function CommissionDetails({ onNavigate }) {
             <div className="about-section">
               <h2>About this commission</h2>
 
-              <p>
+              {!isSkatePark && <p>{commission.description || "No further details were given."}</p>}
+
+              {isSkatePark && <p>
                 We want to create a skate park that encourages active
                 lifestyles, creativity and community connection. Your ideas
                 will help shape the design, features and overall experience.
-              </p>
+              </p>}
 
-              <p>
+              {isSkatePark && <p>
                 We're looking for input from people of all ages and
                 backgrounds, including young people, families, local residents
                 and community groups.
-              </p>
+              </p>}
             </div>
           </article>
 
