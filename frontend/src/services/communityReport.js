@@ -5,8 +5,42 @@ import { isFacilitatorCoded, isRenderableFinding } from '../pages/CodingFindings
 // It is built from published findings only: ideas that passed the tier gate,
 // de-identification and AI coding, and -- when anything was flagged -- were
 // approved by a facilitator. Rejected or still-pending ideas are never published,
-// so they never appear here. Not yet split per commission (Semester 2).
+// so they never appear here.
+//
+// Ideas sent from a client's commission get their own report ("<commission title>");
+// ideas not linked to a commission (sample commissions, older ideas) stay in "Community ideas".
 export const COMMUNITY_REPORT_ID = 'community-ideas'
+export const COMMISSION_REPORT_PREFIX = 'commission-ideas-'
+
+export function commissionReportId(commissionId) {
+  return `${COMMISSION_REPORT_PREFIX}${commissionId}`
+}
+
+/** The commission id in a per-commission report id, or null for any other report. */
+export function commissionIdFromReportId(reportId) {
+  return typeof reportId === 'string' && reportId.startsWith(COMMISSION_REPORT_PREFIX)
+    ? reportId.slice(COMMISSION_REPORT_PREFIX.length) || null
+    : null
+}
+
+/**
+ * Splits findings into the ideas for each known commission and the rest.
+ * An idea whose commission no longer exists falls back to the general report.
+ */
+export function splitByCommission(findings, commissions) {
+  const known = new Set((commissions ?? []).map((commission) => commission.id))
+  const byCommission = new Map()
+  const general = []
+  for (const finding of findings) {
+    if (finding.commissionId && known.has(finding.commissionId)) {
+      if (!byCommission.has(finding.commissionId)) byCommission.set(finding.commissionId, [])
+      byCommission.get(finding.commissionId).push(finding)
+    } else {
+      general.push(finding)
+    }
+  }
+  return { byCommission, general }
+}
 
 const percent = (value) => `${Math.round(value * 100)}%`
 
@@ -40,11 +74,11 @@ export function groupByTheme(findings) {
 }
 
 /** The row shown in the Reports received table. */
-export function buildCommunityReportSummary(rawFindings) {
+export function buildCommunityReportSummary(rawFindings, commission = null) {
   const findings = rawFindings.filter(isRenderableFinding)
   return {
-    id: COMMUNITY_REPORT_ID,
-    project: 'Community ideas',
+    id: commission ? commissionReportId(commission.id) : COMMUNITY_REPORT_ID,
+    project: commission ? commission.title : 'Community ideas',
     group: 'Community members',
     reportingPeriod: findings.length > 0 ? `Live · updated ${today()}` : 'Waiting for approved ideas',
     status: findings.length > 0 ? 'FINAL' : 'DRAFT',
@@ -52,9 +86,13 @@ export function buildCommunityReportSummary(rawFindings) {
 }
 
 /** The full report, in the same shape ReportDetailPage already renders. Null when nothing is published. */
-export function buildCommunityReportDetail(rawFindings) {
+export function buildCommunityReportDetail(rawFindings, commission = null) {
   const findings = rawFindings.filter(isRenderableFinding)
   if (findings.length === 0) return null
+
+  const researchQuestion = commission
+    ? `Ideas shared by community members in response to \u201c${commission.title}\u201d.`
+    : 'Ideas shared by community members through \u201cSubmit an Idea\u201d.'
 
   const themes = groupByTheme(findings)
   const ideaCount = new Set(findings.map((finding) => finding.sourceRef)).size
@@ -64,16 +102,20 @@ export function buildCommunityReportDetail(rawFindings) {
   let quoteNumber = 0
 
   return {
-    id: COMMUNITY_REPORT_ID,
-    title: 'Community ideas report',
-    subtitle:
-      'Themes from ideas community members submitted through the VCNITY platform, after the sensitivity tier gate, de-identification, AI coding and facilitator review.',
+    id: commission ? commissionReportId(commission.id) : COMMUNITY_REPORT_ID,
+    title: commission ? `${commission.title} \u2014 community ideas` : 'Community ideas report',
+    subtitle: commission
+      ? `Themes from ideas community members submitted for this commission, after the sensitivity tier gate, de-identification, AI coding and facilitator review.`
+      : 'Themes from ideas community members submitted through the VCNITY platform, after the sensitivity tier gate, de-identification, AI coding and facilitator review.',
     badges: ['AI-assisted', 'Facilitator-verified', 'De-identified'],
     preparedFor: '[Council 1]',
     date: today(),
-    file: 'vcnity-community-ideas-live',
+    file: commission ? `vcnity-commission-${commission.id}-ideas` : 'vcnity-community-ideas-live',
     purpose:
-      'This report brings together the ideas community members shared through "Submit an Idea". Every idea was checked against its group’s sensitivity tier, de-identified before any AI processing, and coded into themes by AI. Anything the AI was unsure about was reviewed and approved by a facilitator before it could appear here. Quotes are the de-identified text; no names, contact details or raw submissions are shown.',
+      (commission
+        ? `This report brings together the ideas community members shared for \u201c${commission.title}\u201d. `
+        : 'This report brings together the ideas community members shared through "Submit an Idea". ') +
+      'Every idea was checked against its group’s sensitivity tier, de-identified before any AI processing, and coded into themes by AI. Anything the AI was unsure about was reviewed and approved by a facilitator before it could appear here. Quotes are the de-identified text; no names, contact details or raw submissions are shown.',
     stats: [
       { label: 'Ideas published', value: String(ideaCount) },
       { label: 'Themes', value: String(themes.length) },
@@ -101,7 +143,7 @@ export function buildCommunityReportDetail(rawFindings) {
         title: group.theme,
         commissioningBody: '[Council 1]',
         deliveredBy: 'Community members, via the VCNITY platform',
-        researchQuestion: 'Ideas shared by community members through \u201cSubmit an Idea\u201d.',
+        researchQuestion,
         method:
           'Written ideas submitted in the community portal. Each passed the sensitivity tier gate and de-identification before AI coding.',
         analysis: parts.join(' '),

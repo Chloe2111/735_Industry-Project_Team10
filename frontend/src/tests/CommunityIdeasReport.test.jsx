@@ -9,7 +9,9 @@ import {
   COMMUNITY_REPORT_ID,
   buildCommunityReportDetail,
   buildCommunityReportSummary,
+  commissionReportId,
   groupByTheme,
+  splitByCommission,
 } from '../services/communityReport'
 import { apiClient } from '../services/apiClient'
 import { listFindings } from '../services/findingsService'
@@ -122,5 +124,56 @@ describe('Reports received with community ideas', () => {
 
     await user.click(within(panel).getAllByRole('button', { name: /View detail/ })[0])
     expect(within(panel).getByRole('heading', { name: 'AI confidence' })).toBeInTheDocument()
+  })
+})
+
+describe('Community ideas per commission', () => {
+  const COMMISSION = { id: 'c-123', title: 'TEST - Riverside shade and seating ideas', status: 'OPEN' }
+  const EMPTY_COMMISSION = { id: 'c-456', title: 'Library opening hours', status: 'OPEN' }
+  const LINKED = [
+    ...PUBLISHED,
+    finding('f4', 'sub-4', 'Shade and seating', 'shaded benches along the garden path', 0.91, { commissionId: 'c-123' }),
+    finding('f5', 'sub-5', 'Heat safety', 'volunteers left early because of the heat', 0.86, { commissionId: 'c-123' }),
+    finding('f6', 'sub-6', 'Other', 'idea for a commission that was deleted', 0.9, { commissionId: 'gone' }),
+  ]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    apiClient.get.mockImplementation(async (path) => {
+      if (path === '/reports') return [SEEDED_REPORT]
+      if (path === '/commissions') return [COMMISSION, EMPTY_COMMISSION]
+      throw new Error(`unexpected ${path}`)
+    })
+    listFindings.mockResolvedValue({ data: LINKED })
+  })
+
+  it('splits ideas by commission; unknown commissions fall back to the general report', () => {
+    const { byCommission, general } = splitByCommission(LINKED, [COMMISSION])
+    expect(byCommission.get('c-123').map((f) => f.itemId)).toEqual(['f4', 'f5'])
+    expect(general.map((f) => f.itemId)).toEqual(['f1', 'f2', 'f3', 'x1', 'f6'])
+  })
+
+  it('lists one report per commission, Final once ideas are published and Not yet available before', async () => {
+    renderAt('/reports-received')
+
+    const linked = (await screen.findByText('TEST - Riverside shade and seating ideas')).closest('tr')
+    expect(within(linked).getByRole('link', { name: /View report/ })).toHaveAttribute('href', `/reports-received/${commissionReportId('c-123')}`)
+    const empty = screen.getByText('Library opening hours').closest('tr')
+    expect(within(empty).getByText('Not yet available')).toBeInTheDocument()
+    expect(screen.getByText('Community ideas')).toBeInTheDocument()
+  })
+
+  it("opens a commission's report with only that commission's ideas", async () => {
+    renderAt(`/reports-received/${commissionReportId('c-123')}`)
+
+    expect(await screen.findByRole('heading', { name: /TEST - Riverside shade and seating ideas — community ideas/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Shade and seating/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Safety after dark/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps commission ideas out of the general Community ideas report', () => {
+    const { general } = splitByCommission(LINKED, [COMMISSION])
+    const report = buildCommunityReportDetail(general)
+    expect(JSON.stringify(report)).not.toContain('shaded benches')
   })
 })

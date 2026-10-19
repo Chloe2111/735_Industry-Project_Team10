@@ -27,7 +27,7 @@ async function listFindingsForSource(sourceRef, options) {
   throw new Error('Could not load all coded findings because the page limit was reached.')
 }
 
-async function listPublishedSubmissionIds(options) {
+async function listPublishedSubmissions(options) {
   const groups = await apiClient.get('/intake/group-tiers', options)
   if (!Array.isArray(groups) || groups.some(
     (group) => typeof group?.groupId !== 'string' || !group.groupId.trim(),
@@ -49,16 +49,28 @@ async function listPublishedSubmissionIds(options) {
   )) {
     throw new Error('The server returned an invalid published-submissions list. Please try again.')
   }
-  const ids = perGroup.flat().map((submission) => submission.id)
-  return [...new Set(ids)]
+  // One entry per submission id, remembering the commission the idea answers (if any).
+  const commissionBySubmission = new Map()
+  for (const submission of perGroup.flat()) {
+    if (!commissionBySubmission.has(submission.id)) {
+      commissionBySubmission.set(submission.id, submission.commissionId || null)
+    }
+  }
+  return commissionBySubmission
 }
 
 export async function listFindings(options) {
-  const sourceRefs = await listPublishedSubmissionIds(options)
+  const submissions = await listPublishedSubmissions(options)
+  const sourceRefs = [...submissions.keys()]
 
   const perSource = await Promise.all(
     sourceRefs.map((sourceRef) => listFindingsForSource(sourceRef, options)),
   )
   // Same `{ data }` shape the mock returned, so CodingFindingsPage is unchanged.
-  return { data: perSource.flat() }
+  // Findings of an idea sent from a client commission also carry that commissionId.
+  const data = perSource.flatMap((findings, index) => {
+    const commissionId = submissions.get(sourceRefs[index])
+    return commissionId ? findings.map((finding) => ({ ...finding, commissionId })) : findings
+  })
+  return { data }
 }
