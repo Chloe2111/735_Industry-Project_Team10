@@ -11,8 +11,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.HashSet;
 
 /**
@@ -36,15 +37,34 @@ import java.util.HashSet;
  */
 public class PipelineService {
 
+    // Live Claude call settings. All come from environment variables so no key or
+    // model name is ever written into the code or committed to GitHub.
+    //   ANTHROPIC_API_KEY  required for live mode; without it the mock coder is used
+    //   ANTHROPIC_MODEL    the model chosen in the Week 10 trial (default kept for compatibility)
+    //   ANTHROPIC_API_URL  optional override, used by tests to point at a local fake server
+    static final String DEFAULT_MODEL = "claude-sonnet-4-6";
+    static final String DEFAULT_API_URL = "https://api.anthropic.com/v1/messages";
+    private static final int MAX_TOKENS = 500;
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     private final boolean mockMode;
     private final TranscriptCoder suppliedCoder;
     private final String apiKey;
+    private final String model;
+    private final URI apiUrl;
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
     public PipelineService() {
+        this(System.getenv("ANTHROPIC_API_KEY"), System.getenv("ANTHROPIC_MODEL"), System.getenv("ANTHROPIC_API_URL"));
+    }
+
+    /** Live (or mock, when apiKey is blank) service with explicit settings; used by tests. */
+    PipelineService(String apiKey, String model, String apiUrl) {
         this.suppliedCoder = null;
-        this.apiKey = System.getenv("ANTHROPIC_API_KEY");
+        this.apiKey = apiKey;
         this.mockMode = (apiKey == null || apiKey.isBlank());
+        this.model = (model == null || model.isBlank()) ? DEFAULT_MODEL : model.trim();
+        this.apiUrl = URI.create((apiUrl == null || apiUrl.isBlank()) ? DEFAULT_API_URL : apiUrl.trim());
     }
 
     /**
@@ -55,6 +75,8 @@ public class PipelineService {
         this.suppliedCoder = java.util.Objects.requireNonNull(coder);
         this.apiKey = null;
         this.mockMode = false;
+        this.model = DEFAULT_MODEL;
+        this.apiUrl = URI.create(DEFAULT_API_URL);
     }
 
     public boolean isMockMode() {
@@ -203,48 +225,74 @@ public class PipelineService {
         }
 
         String prompt = String.format(CODING_PROMPT_TEMPLATE, text);
-        String escapedPrompt = prompt.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
-        String body = """
-                {
-                  "model": "claude-sonnet-4-6",
-                  "max_tokens": 300,
-                  "messages": [{"role": "user", "content": "%s"}]
-                }
-                """.formatted(escapedPrompt);
-
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://api.anthropic.com/v1/messages"))
+                .uri(apiUrl)
+                .timeout(Duration.ofSeconds(60))
                 .header("x-api-key", apiKey)
                 .header("anthropic-version", "2023-06-01")
                 .header("content-type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .POST(HttpRequest.BodyPublishers.ofString(buildRequestBody(model, prompt)))
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            // Only the status and the API's error type are reported -- never the
+            // submission text -- so nothing sensitive reaches the logs.
+            String reason = "Claude API returned HTTP " + response.statusCode() + " (" + apiErrorType(response.body()) + ")";
+            System.err.println("[PipelineService] " + reason);
+            throw new IOException(reason);
+        }
+        return parseCodingResponse(response.body());
+    }
 
-        // Minimal, dependency-free JSON field extraction. If your actual
-        // Maven project already has Jackson (spring-boot-starter-web
-        // pulls it in), swap this for ObjectMapper — it will be more
-        // robust than these regexes.
-        String rawText = extractJsonStringField(response.body(), "text");
+    /** Builds the Messages API request with Jackson so any text is escaped correctly. */
+    static String buildRequestBody(String model, String prompt) throws IOException {
+        ObjectNode body = JSON.createObjectNode();
+        body.put("model", model);
+        body.put("max_tokens", MAX_TOKENS);
+        ObjectNode message = body.putArray("messages").addObject();
+        message.put("role", "user");
+        message.put("content", prompt);
+        return JSON.writeValueAsString(body);
+    }
+
+    /**
+     * Reads Claude's reply: joins the text blocks, then reads the JSON object the
+     * prompt asks for (tolerating a ```json fence or a sentence around it).
+     * Missing fields come back empty, which the CodedFinding checks reject, so a
+     * bad reply becomes a visible coding failure rather than a fake finding.
+     */
+    static Map<String, Object> parseCodingResponse(String responseBody) throws IOException {
+        JsonNode root = JSON.readTree(responseBody);
+        StringBuilder text = new StringBuilder();
+        for (JsonNode block : root.path("content")) {
+            if ("text".equals(block.path("type").asText())) {
+                text.append(block.path("text").asText());
+            }
+        }
+        String reply = text.toString();
+        int open = reply.indexOf('{');
+        int close = reply.lastIndexOf('}');
+        if (open < 0 || close <= open) {
+            throw new IOException("Claude reply did not contain a JSON object");
+        }
+        JsonNode coded = JSON.readTree(reply.substring(open, close + 1));
+
         Map<String, Object> parsed = new HashMap<>();
-        parsed.put("theme", extractJsonStringField(rawText, "theme"));
-        parsed.put("quote", extractJsonStringField(rawText, "quote"));
-        String confidenceStr = extractJsonNumberField(rawText, "confidence");
-        parsed.put("confidence", confidenceStr != null ? Double.parseDouble(confidenceStr) : 0.0);
+        parsed.put("theme", coded.path("theme").asText(""));
+        parsed.put("quote", coded.path("quote").asText(""));
+        JsonNode confidence = coded.path("confidence");
+        parsed.put("confidence", confidence.isNumber() || confidence.isTextual()
+                ? confidence.asDouble(Double.NaN) : null);
         return parsed;
     }
 
-    private static String extractJsonStringField(String json, String field) {
-        if (json == null) return "";
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\"\\s*:\\s*\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : "";
-    }
-
-    private static String extractJsonNumberField(String json, String field) {
-        if (json == null) return null;
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\"\\s*:\\s*([0-9.]+)").matcher(json);
-        return m.find() ? m.group(1) : null;
+    private static String apiErrorType(String body) {
+        try {
+            return JSON.readTree(body).path("error").path("type").asText("unknown error");
+        } catch (IOException | RuntimeException e) {
+            return "unreadable error body";
+        }
     }
 
     // ---------------------------------------------------------------
