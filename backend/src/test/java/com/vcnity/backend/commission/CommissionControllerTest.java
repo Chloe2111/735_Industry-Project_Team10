@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -117,5 +118,33 @@ class CommissionControllerTest {
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.tier").exists());
+    }
+
+    @Test
+    void listReturnsSavedCommissions() throws Exception {
+        Commission saved = new Commission(
+                "TEST - Riverside shade and seating ideas",
+                "Where should new shade go?",
+                998,
+                "4 weeks from posting",
+                null,
+                List.of("Seniors groups"),
+                List.of("Executive summary"));
+        when(commissionService.list()).thenReturn(List.of(saved));
+
+        mockMvc.perform(get("/api/commissions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].title").value("TEST - Riverside shade and seating ideas"))
+                .andExpect(jsonPath("$.data[0].status").value("OPEN"));
+    }
+
+    @Test
+    void listIsEmptyWhenNothingSaved() throws Exception {
+        when(commissionService.list()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/commissions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isEmpty());
     }
 }

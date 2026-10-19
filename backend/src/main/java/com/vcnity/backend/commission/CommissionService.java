@@ -1,6 +1,8 @@
 package com.vcnity.backend.commission;
 
+import java.util.List;
 import java.util.Set;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -32,5 +34,10 @@ public class CommissionService {
                 request.getReportFormats());
 
         return repository.save(commission);
+    }
+
+    /** Every saved commission, newest first, for the client's My commissions list. */
+    public List<Commission> list() {
+        return repository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 }
