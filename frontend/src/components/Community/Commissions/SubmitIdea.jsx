@@ -1,0 +1,404 @@
+import { useEffect, useState } from "react";
+import { CommunitySidebar } from "./OpenCommissions";
+import CommunityHeader, { ChatButton } from "../CommunityHeader";
+import { listGroupTiers, submitFeedback } from "../../../services/intakeApi";
+import { tierName } from "../../../constants/tiers";
+import { useToast } from "../../Toast/ToastProvider";
+import { SAMPLE_COMMISSIONS } from "../../../services/openCommissions";
+
+/**
+ * The idea is sent to intake as one text, with each answer labelled, so the
+ * pipeline (tier gate -> de-identification -> AI coding) sees the whole idea.
+ */
+export function buildIdeaText(formData) {
+  const parts = [
+    ["Idea title", formData.title],
+    ["Idea", formData.description],
+    ["Problem it solves", formData.problem],
+    ["Who would benefit", formData.beneficiaries],
+    ["Expected community impact", formData.impact],
+  ];
+  return parts
+    .filter(([, value]) => value && value.trim())
+    .map(([label, value]) => `${label}: ${value.trim()}`)
+    .join("\n");
+}
+
+export default function SubmitIdea({ onNavigate, commission = SAMPLE_COMMISSIONS[0] }) {
+  const toast = useToast();
+  const [groups, setGroups] = useState([]);
+  const [groupsError, setGroupsError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    groupId: "",
+    title: "",
+    description: "",
+    problem: "",
+    beneficiaries: "",
+    impact: "",
+    confirmation: false,
+  });
+
+  const [errors, setErrors] = useState({});
+  const [attachments, setAttachments] = useState([]);
+  const [attachmentError, setAttachmentError] = useState("");
+
+  const allowedExtensions = ["png", "jpg", "jpeg", "pdf", "mp4", "mov", "mp3", "wav", "m4a"];
+  const maxFileSize = 10 * 1024 * 1024;
+
+  // The group decides the sensitivity tier, so the idea must name a classified group.
+  useEffect(() => {
+    const controller = new AbortController();
+    listGroupTiers({ signal: controller.signal })
+      .then((data) => {
+        const classified = (Array.isArray(data) ? data : []).filter((group) => group?.groupId && group.tier != null);
+        setGroups(classified);
+        setGroupsError(classified.length === 0 ? "No groups have a tier yet. Ask a coordinator to classify your group first." : "");
+      })
+      .catch((error) => {
+        if (error?.name === "AbortError") return;
+        setGroupsError(error.message || "Could not load your groups. Please try again.");
+      });
+    return () => controller.abort();
+  }, []);
+
+  function handleAttachments(event) {
+    const selected = Array.from(event.target.files || []);
+    const invalid = selected.find((file) => {
+      const extension = file.name.split(".").pop()?.toLowerCase();
+      return !allowedExtensions.includes(extension) || file.size > maxFileSize;
+    });
+
+    if (invalid) {
+      setAttachmentError("Use PNG, JPG, JPEG, PDF, MP4, MOV, MP3, WAV or M4A files up to 10MB each.");
+      event.target.value = "";
+      return;
+    }
+
+    setAttachmentError("");
+    setAttachments((current) => [...current, ...selected]);
+    event.target.value = "";
+  }
+
+  function removeAttachment(index) {
+    setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function handleChange(event) {
+    const { name, value, type, checked } = event.target;
+
+    setFormData((current) => ({
+      ...current,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+
+    setErrors((current) => ({
+      ...current,
+      [name]: "",
+    }));
+  }
+
+  function validateForm() {
+    const newErrors = {};
+
+    if (!formData.groupId) {
+      newErrors.groupId = "Choose the group you are submitting with.";
+    }
+
+    if (!formData.title.trim()) {
+      newErrors.title = "Idea title is required.";
+    } else if (formData.title.trim().length < 3) {
+      newErrors.title = "Idea title must be at least 3 characters.";
+    }
+
+    if (!formData.description.trim()) {
+      newErrors.description = "Please describe your idea.";
+    }
+
+    if (!formData.problem.trim()) {
+      newErrors.problem = "Please explain the problem your idea solves.";
+    }
+
+    if (!formData.beneficiaries.trim()) {
+      newErrors.beneficiaries =
+        "Please explain who would benefit from your idea.";
+    }
+
+    if (!formData.confirmation) {
+      newErrors.confirmation =
+        "Please confirm that your submission follows the community guidelines.";
+    }
+
+    setErrors(newErrors);
+
+    return Object.keys(newErrors).length === 0;
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    if (!validateForm() || submitting) {
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        groupIds: [formData.groupId],
+        text: buildIdeaText(formData),
+      };
+      // Only commissions a client posted exist in the database; sample ones are not linked.
+      if (commission?.source === "client" && commission.id) {
+        payload.commissionId = commission.id;
+      }
+      const receipt = await submitFeedback(payload);
+      onNavigate("success", { receipt, title: formData.title.trim() });
+    } catch (error) {
+      toast.error(error.message || "Could not submit your idea. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function handleDraft() {
+    window.alert("Draft saved for this prototype.");
+  }
+
+  return (
+    <div className="commission-page">
+      <CommunityHeader active="commissions" onNavigate={onNavigate} crumbs={["Commissions", commission.title, "Submit an Idea"]} />
+
+      <main className="commission-layout">
+        <CommunitySidebar onNavigate={onNavigate} />
+
+        <form className="submission-layout" onSubmit={handleSubmit}>
+          <section className="submission-card">
+            <button
+              className="back-link"
+              type="button"
+              onClick={() => onNavigate("details")}
+            >
+              ← Back to Commission Details
+            </button>
+
+            <h1>Submit an Idea</h1>
+            <p className="organisation-large">
+              {commission.title}
+            </p>
+
+            <div className="submission-info">
+              <strong>Share your ideas and help shape a better community.</strong>
+              <p>
+                Provide as much detail as possible so the organisation can fully
+                understand your idea.
+              </p>
+            </div>
+
+            <FormField
+              label="Your group"
+              required
+              helper="Your group's sensitivity tier decides how this idea is handled."
+              error={errors.groupId || groupsError}
+            >
+              <select name="groupId" value={formData.groupId} onChange={handleChange} aria-label="Your group">
+                <option value="">Select your group</option>
+                {groups.map((group) => (
+                  <option key={group.groupId} value={group.groupId}>
+                    {(group.groupName || group.groupId) + " · " + tierName(group.tier)}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField
+              label="Idea title"
+              required
+              error={errors.title}
+              count={`${formData.title.length}/100`}
+            >
+              <input
+                name="title"
+                value={formData.title}
+                onChange={handleChange}
+                maxLength={100}
+                placeholder="e.g. Inclusive Skate Zone"
+              />
+            </FormField>
+
+            <FormField
+              label="Describe your idea"
+              required
+              helper="Explain what you are proposing and how it would work. Recommended: 100–500 words."
+              error={errors.description}
+              count={`${formData.description.length}/500`}
+            >
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                maxLength={500}
+                rows={6}
+                placeholder="Describe your idea..."
+              />
+            </FormField>
+
+            <FormField
+              label="What problem does your idea solve?"
+              required
+              error={errors.problem}
+              count={`${formData.problem.length}/300`}
+            >
+              <textarea
+                name="problem"
+                value={formData.problem}
+                onChange={handleChange}
+                maxLength={300}
+                rows={4}
+                placeholder="Explain the need or challenge..."
+              />
+            </FormField>
+
+            <FormField
+              label="Who would benefit from this idea?"
+              required
+              error={errors.beneficiaries}
+              count={`${formData.beneficiaries.length}/300`}
+            >
+              <textarea
+                name="beneficiaries"
+                value={formData.beneficiaries}
+                onChange={handleChange}
+                maxLength={300}
+                rows={4}
+                placeholder="e.g. young people, local families, schools..."
+              />
+            </FormField>
+
+            <FormField
+              label="Expected community impact"
+              count={`${formData.impact.length}/300`}
+            >
+              <textarea
+                name="impact"
+                value={formData.impact}
+                onChange={handleChange}
+                maxLength={300}
+                rows={4}
+                placeholder="e.g. improved wellbeing, more active lifestyles..."
+              />
+            </FormField>
+          </section>
+
+          <aside className="submission-side">
+            <div className="upload-card">
+              <h2>Attachments</h2>
+              <p className="optional-text">Optional</p>
+
+              <div className="upload-box">
+                <div className="upload-icon">↑</div>
+                <strong>Add supporting material</strong>
+                <p>Upload images, PDFs, videos or audio files.</p>
+                <small>PNG, JPG, JPEG, PDF, MP4, MOV, MP3, WAV, M4A · Max 10MB each</small>
+                <small className="attachment-note">Attachments are not sent for analysis yet. Only the text of your idea is submitted.</small>
+
+                <label className="secondary-button upload-button">
+                  Add files
+                  <input
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.pdf,.mp4,.mov,.mp3,.wav,.m4a"
+                    multiple
+                    hidden
+                    onChange={handleAttachments}
+                  />
+                </label>
+
+                {attachmentError && <p className="form-error">{attachmentError}</p>}
+
+                {attachments.length > 0 && (
+                  <div className="attachment-list">
+                    {attachments.map((file, index) => (
+                      <div className="attachment-item" key={`${file.name}-${index}`}>
+                        <span>📎 {file.name}</span>
+                        <button type="button" onClick={() => removeAttachment(index)}>Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="submission-actions-card">
+              <label className="confirmation-row">
+                <input
+                  type="checkbox"
+                  name="confirmation"
+                  checked={formData.confirmation}
+                  onChange={handleChange}
+                />
+
+                <span>
+                  I confirm this submission is my own work and follows the
+                  community guidelines.
+                </span>
+              </label>
+
+              {errors.confirmation && (
+                <p className="form-error">{errors.confirmation}</p>
+              )}
+
+              <button
+                className="secondary-button full-width"
+                type="button"
+                onClick={handleDraft}
+              >
+                Save as Draft
+              </button>
+
+              <button
+                className="black-button full-width"
+                type="submit"
+                disabled={submitting}
+              >
+                {submitting ? "Submitting…" : "Submit Idea →"}
+              </button>
+            </div>
+
+            <div className="help-card">
+              <h3>Need help?</h3>
+              <button type="button">Community Guidelines</button>
+              <button type="button">Contact Support</button>
+            </div>
+          </aside>
+        </form>
+      </main>
+
+      <ChatButton onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+function FormField({
+  label,
+  required = false,
+  helper,
+  error,
+  count,
+  children,
+}) {
+  return (
+    <div className="submission-field">
+      <label>
+        {label} {required && <span className="required">*</span>}
+      </label>
+
+      {helper && <p className="field-helper">{helper}</p>}
+
+      {children}
+
+      <div className="field-footer">
+        <span className="form-error">{error || ""}</span>
+        {count && <small>{count}</small>}
+      </div>
+    </div>
+  );
+}

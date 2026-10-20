@@ -1,12 +1,46 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ToastProvider } from './components/Toast/ToastProvider'
+import { PortalLayout } from './components/Layout/PortalLayout'
+import { DashboardPage } from './pages/DashboardPage'
+import { PostCommissionPage } from './pages/PostCommissionPage'
+import { MyCommissionsPage } from './pages/MyCommissionsPage'
+import { ReportsReceivedPage } from './pages/ReportsReceivedPage'
+import { ReportDetailPage } from './pages/ReportDetailPage'
+import { MyAccountPage } from './pages/MyAccountPage'
+import { ExceptionsQueuePage } from './pages/ExceptionsQueuePage'
+import { CodingFindingsPage } from './pages/CodingFindingsPage'
+import CommunityWorkspace from './components/Community/CommunityWorkspace'
 
 export default function App() {
   return (
     <ToastProvider>
-      <div className="page-card">
-        <h1>Client portal</h1>
-        <p>Basic setup only — features build out from here.</p>
-      </div>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<PortalLayout role="client" />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="post-commission" element={<PostCommissionPage />} />
+            <Route path="my-commissions" element={<MyCommissionsPage />} />
+            <Route path="reports-received" element={<ReportsReceivedPage />} />
+            <Route path="reports-received/:reportId" element={<ReportDetailPage />} />
+            {/* Moved to the facilitator portal; old links still land in the right place. */}
+            <Route path="exceptions-queue" element={<Navigate to="/facilitator/exceptions-queue" replace />} />
+            <Route path="coding-findings" element={<Navigate to="/facilitator/coding-findings" replace />} />
+            <Route path="account" element={<MyAccountPage />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Route>
+          {/* Facilitator portal: the human gate in the AI analysis pipeline (first draft). */}
+          <Route path="facilitator" element={<PortalLayout role="facilitator" />}>
+            <Route index element={<Navigate to="exceptions-queue" replace />} />
+            <Route path="exceptions-queue" element={<ExceptionsQueuePage />} />
+            <Route path="coding-findings" element={<CodingFindingsPage />} />
+            <Route path="*" element={<Navigate to="exceptions-queue" replace />} />
+          </Route>
+          {/* Community workspace manages its own header/navigation (Story 17), so it sits
+              outside the client portal's PortalLayout shell rather than inside it. */}
+          <Route path="community" element={<CommunityWorkspace />} />
+        </Routes>
+      </BrowserRouter>
     </ToastProvider>
   )
 }

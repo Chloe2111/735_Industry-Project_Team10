@@ -1,0 +1,69 @@
+/**
+ * intakeApi.js
+ *
+ * Story 24: connects the community submission form to the intake and
+ * tier-classification endpoints.
+ *
+ * apiClient's BASE_URL already includes `/api`, so paths here must NOT
+ * repeat it (same rule as consentApi.js). On failure apiClient throws an
+ * ApiError whose `.message` is ready to show to the person.
+ */
+
+import { apiClient } from './apiClient'
+
+/** Mirrors the backend rule: group names match regardless of case and extra spaces. */
+export function normaliseGroupId(value) {
+  return (value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+/**
+ * Submits feedback for a group.
+ *
+ * payload shape (must match SubmissionRequest.java on the backend):
+ *   { groupIds: string[], text: string }
+ *
+ * There is no tier in the payload on purpose: the backend takes the tier
+ * from the group's own record.
+ *
+ * Returns the receipt:
+ *   { id, status, tier, groupIds, message, submittedAt }
+ */
+export function submitFeedback(payload) {
+  return apiClient.post('/intake/submissions', payload)
+}
+
+/** Fetches the latest receipt for a submission, e.g. to see if it has been published yet. */
+export function getSubmission(id) {
+  return apiClient.get(`/intake/submissions/${encodeURIComponent(id)}`)
+}
+
+/**
+ * Publishes a submission whose flags have all been cleared. Clearing a flag never publishes;
+ * this is the separate, explicit action. The backend answers 409 with a reason if it is not
+ * allowed yet (a flag is still pending or was rejected, or the group is Tier 3).
+ */
+export function publishSubmission(id) {
+  return apiClient.post(`/intake/submissions/${encodeURIComponent(id)}/publish`)
+}
+
+/** Published submissions of one group, newest first. */
+export function listPublished(groupId) {
+  return apiClient.get(`/intake/submissions?groupId=${encodeURIComponent(groupId)}`)
+}
+
+/** Every group that a person has classified, with its tier, history and version. */
+export function listGroupTiers(options) {
+  return apiClient.get('/intake/group-tiers', options)
+}
+
+/**
+ * Sets or changes a group's tier.
+ * body shape (must match TierRequest.java): { groupId, tier, setBy, reason, expectedVersion }
+ *
+ * expectedVersion is the `version` of the group as it was last loaded, or null for a group that
+ * is not classified yet. If someone else changed the group in the meantime the backend answers
+ * 409 and saves nothing, so one coordinator cannot silently overwrite another.
+ */
+export function setGroupTier(body) {
+  return apiClient.put('/intake/group-tiers', body)
+}

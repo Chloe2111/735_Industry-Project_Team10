@@ -1,0 +1,100 @@
+.my-account-page__subtitle {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin: 0.25rem 0 1.5rem;
+}
+
+.my-account-page__profile-header {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 1rem;
+}
+
+.my-account-page__avatar {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: var(--color-dark);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.my-account-page__profile-header > div {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.my-account-page__profile-name {
+  font-weight: 700;
+}
+
+.my-account-page__profile-role {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.my-account-page__edit {
+  background: none;
+  border: none;
+  color: var(--color-brand);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.my-account-page__details {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.my-account-page__details > div {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  gap: 1rem;
+  font-size: 0.9rem;
+}
+
+.my-account-page__details dt {
+  color: var(--color-text-muted);
+}
+
+.my-account-page__details dd {
+  margin: 0;
+}
+
+.my-account-page__password-form {
+  max-width: 26rem;
+}
+
+.my-account-page__password-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.my-account-page__placeholder {
+  background: #f7f2e8;
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.my-account-page__signout-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f7f2e8;
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  font-size: 0.9rem;
+}

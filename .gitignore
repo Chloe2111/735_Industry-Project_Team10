@@ -27,5 +27,9 @@ application-local.properties
 # Temporary Microsoft Word files
 ~$*
 
-# Node dependencies
+# Frontend build output and dependencies
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
 node_modules/
+dist/
