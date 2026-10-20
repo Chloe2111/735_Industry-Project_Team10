@@ -95,7 +95,12 @@ public final class Deidentify {
      */
     private static final Set<String> COMMON_WORD_STOPLIST = Set.of(
             "The", "This", "That", "These", "Those", "My", "Our", "Your", "Their",
-            "We", "It", "They", "She", "He", "I");
+            "We", "It", "They", "She", "He", "I",
+            // v4: community-idea form field labels and common sentence-
+            // starting words found in real submissions, flagged directly
+            // by the team after a live run (BT-25 follow-up).
+            "More", "Idea", "Problem", "Who", "Local", "Solves", "Title",
+            "Benefit", "Solution", "Would", "Residents", "People", "Families");
 
     /**
      * Ages, in three common forms:
@@ -206,6 +211,44 @@ public final class Deidentify {
      * overlap-resolution step in deidentify(), the same as every other
      * detector — this method only removes the obvious non-name words.
      */
+    /**
+     * True if the character at {@code pos} in {@code text} begins a new
+     * sentence or form field: either the very start of the text, or
+     * preceded (ignoring whitespace) by one of {@code . ! ? :} or a
+     * newline. The colon case is what lets this recognise community-idea
+     * field labels ("Idea title: ...", "Problem it solves: ...", "Who
+     * would benefit: ...") generically, without hardcoding every label.
+     */
+    private static boolean isSentenceOrFieldStart(String text, int pos) {
+        int i = pos - 1;
+        while (i >= 0 && (text.charAt(i) == ' ' || text.charAt(i) == '\t')) {
+            i--;
+        }
+        if (i < 0) {
+            return true;
+        }
+        char c = text.charAt(i);
+        return c == '.' || c == '!' || c == '?' || c == ':' || c == '\n' || c == '\r';
+    }
+
+    /**
+     * True if the match is immediately followed by a comma (only
+     * whitespace in between, if any). This is the exception to the
+     * sentence/field-start exclusion below: "Tina, 34," is exactly the
+     * shape a real name introduction takes in a community idea, even
+     * when "Tina" happens to be the first word after a field label like
+     * "Idea title:". Without this exception, fixing the field-label
+     * over-redaction would have silently reopened the original gap this
+     * detector exists to close.
+     */
+    private static boolean isFollowedByComma(String text, int matchEnd) {
+        int i = matchEnd;
+        while (i < text.length() && (text.charAt(i) == ' ' || text.charAt(i) == '\t')) {
+            i++;
+        }
+        return i < text.length() && text.charAt(i) == ',';
+    }
+
     private static List<Entity> findSingleNameHits(String text) {
         List<Entity> hits = new ArrayList<>();
         Matcher m = SINGLE_NAME_RE.matcher(text);
@@ -214,16 +257,14 @@ public final class Deidentify {
             if (MONTH_NAMES.contains(word) || COMMON_WORD_STOPLIST.contains(word)) {
                 continue;
             }
-            // Skip a match at the very start of the text. In practice this is
-            // almost always an ordinary sentence-starting word ("Great
-            // session.") or a field label ("Idea title: ..."), not a real
-            // first name on its own — a live regression found this exact
-            // failure in IntakePayloadContractTest, where "Great" in
-            // "Great session." was wrongly redacted as SINGLE_NAME. Real
-            // names in actual submissions appear well after the first word
-            // (see the "Tina, 34, ... 3 March" example above), so this
-            // exclusion does not weaken detection of them.
-            if (m.start() == 0) {
+            // v4: a sentence/field-start word is excluded UNLESS it is
+            // immediately followed by a comma, e.g. "Tina, 34," right
+            // after "Idea title:". This replaces the narrower v3 rule,
+            // which only excluded the very first word of the whole text
+            // and still let ordinary sentence-starters and field labels
+            // ("More", "Problem", "Who", "Local"...) through — found live
+            // by the team as 3 failures in FacilitatorCodingTest.
+            if (isSentenceOrFieldStart(text, m.start()) && !isFollowedByComma(text, m.end())) {
                 continue;
             }
             hits.add(new Entity(word, m.start(), m.end(), "single_name"));

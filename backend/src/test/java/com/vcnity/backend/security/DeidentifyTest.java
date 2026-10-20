@@ -178,6 +178,37 @@ public class DeidentifyTest {
         assertTrue(result.redactedText().startsWith("It feels unsafe"));
     }
 
+    // --- v4: sentence/field-start words are not redacted unless followed
+    //     by a comma, closing the 3 FacilitatorCodingTest failures the
+    //     team found live, where "Idea", "Problem", "Who" and "Local"
+    //     (community-idea form field labels) were wrongly redacted ---
+
+    @Test
+    void formFieldLabelsAreNotRedacted() {
+        String text = "Idea title: the park needs lighting. Problem it solves: it is unsafe. "
+                + "Who would benefit: Local families.";
+        Deidentify.DeidentificationResult result = Deidentify.deidentify(text, new HashSet<>(), new HashSet<>());
+        String out = result.redactedText();
+        assertTrue(out.contains("Idea title:"));
+        assertTrue(out.contains("Problem it solves:"));
+        assertTrue(out.contains("Who would benefit:"));
+        assertTrue(out.contains("Local families"));
+    }
+
+    @Test
+    void sentenceStartNameWithoutCommaIsLeftAlone() {
+        Deidentify.DeidentificationResult result =
+                Deidentify.deidentify("Maria led the session well.", new HashSet<>(), new HashSet<>());
+        assertTrue(result.redactedText().startsWith("Maria"));
+    }
+
+    @Test
+    void sentenceStartNameWithCommaIsStillRedacted() {
+        Deidentify.DeidentificationResult result =
+                Deidentify.deidentify("Maria, 29, led the session well.", new HashSet<>(), new HashSet<>());
+        assertFalse(result.redactedText().contains("Maria"));
+    }
+
     @Test
     void realSubmissionFromEndToEndTestIsFullyRedacted() {
         // This is the exact text from the live MongoDB record that exposed
