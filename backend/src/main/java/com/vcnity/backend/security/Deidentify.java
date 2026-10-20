@@ -214,6 +214,18 @@ public final class Deidentify {
             if (MONTH_NAMES.contains(word) || COMMON_WORD_STOPLIST.contains(word)) {
                 continue;
             }
+            // Skip a match at the very start of the text. In practice this is
+            // almost always an ordinary sentence-starting word ("Great
+            // session.") or a field label ("Idea title: ..."), not a real
+            // first name on its own — a live regression found this exact
+            // failure in IntakePayloadContractTest, where "Great" in
+            // "Great session." was wrongly redacted as SINGLE_NAME. Real
+            // names in actual submissions appear well after the first word
+            // (see the "Tina, 34, ... 3 March" example above), so this
+            // exclusion does not weaken detection of them.
+            if (m.start() == 0) {
+                continue;
+            }
             hits.add(new Entity(word, m.start(), m.end(), "single_name"));
         }
         return hits;
