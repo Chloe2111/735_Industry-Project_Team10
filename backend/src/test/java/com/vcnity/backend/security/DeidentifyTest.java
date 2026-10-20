@@ -113,4 +113,84 @@ public class DeidentifyTest {
         int count = result.redactedText().split("\\[REDACTED", -1).length - 1;
         assertEquals(2, count);
     }
+
+    // --- v3: single first names, ages, dates (closes the gap found in the
+    //     real end-to-end test where "Tina, 34, ... 3 March" was stored
+    //     and sent to the AI completely unredacted) ---
+
+    @Test
+    void singleFirstNameIsRedacted() {
+        Deidentify.DeidentificationResult result =
+                Deidentify.deidentify("I spoke to Maria about it yesterday.", new HashSet<>(), new HashSet<>());
+        assertFalse(result.redactedText().contains("Maria"));
+        assertTrue(result.redactedText().contains("[REDACTED:SINGLE_NAME]"));
+    }
+
+    @Test
+    void ageInCommaFormIsRedacted() {
+        Deidentify.DeidentificationResult result =
+                Deidentify.deidentify("Tina, 34, said the park needs better lighting.", new HashSet<>(), new HashSet<>());
+        assertFalse(result.redactedText().matches(".*,\\s*34\\s*,.*"));
+        assertTrue(result.redactedText().contains("[REDACTED:AGE]"));
+    }
+
+    @Test
+    void agedPhraseIsRedacted() {
+        Deidentify.DeidentificationResult result =
+                Deidentify.deidentify("My neighbour Raj, aged 67, stopped walking that route.", new HashSet<>(), new HashSet<>());
+        assertFalse(result.redactedText().contains("aged 67"));
+    }
+
+    @Test
+    void yearsOldPhraseIsRedacted() {
+        Deidentify.DeidentificationResult result =
+                Deidentify.deidentify("She is 29 years old and lives nearby.", new HashSet<>(), new HashSet<>());
+        assertFalse(result.redactedText().contains("29 years old"));
+        assertTrue(result.redactedText().contains("[REDACTED:AGE]"));
+    }
+
+    @Test
+    void dayMonthDateIsRedacted() {
+        Deidentify.DeidentificationResult result =
+                Deidentify.deidentify("She said on 3 March that the lighting was poor.", new HashSet<>(), new HashSet<>());
+        assertFalse(result.redactedText().contains("3 March"));
+        assertTrue(result.redactedText().contains("[REDACTED:DATE]"));
+    }
+
+    @Test
+    void monthDayDateIsRedacted() {
+        Deidentify.DeidentificationResult result =
+                Deidentify.deidentify("We met again on August 15 to follow up.", new HashSet<>(), new HashSet<>());
+        assertFalse(result.redactedText().contains("August 15"));
+    }
+
+    @Test
+    void monthNameAloneIsNotWronglyRedactedAsASingleName() {
+        Deidentify.DeidentificationResult result =
+                Deidentify.deidentify("I'll see you in March for the next session.", new HashSet<>(), new HashSet<>());
+        assertTrue(result.redactedText().contains("March"));
+    }
+
+    @Test
+    void commonSentenceStartersAreNotWronglyRedactedAsSingleNames() {
+        Deidentify.DeidentificationResult result =
+                Deidentify.deidentify("It feels unsafe walking home after dark.", new HashSet<>(), new HashSet<>());
+        assertTrue(result.redactedText().startsWith("It feels unsafe"));
+    }
+
+    @Test
+    void realSubmissionFromEndToEndTestIsFullyRedacted() {
+        // This is the exact text from the live MongoDB record that exposed
+        // the gap: single names, ages and dates were all stored unredacted.
+        String real = "Idea title: Tina, 34, said on 3 March that the park needs "
+                + "better lighting near the bus stop. My neighbour Raj, aged 67, "
+                + "stopped walking that route.";
+        Deidentify.DeidentificationResult result = Deidentify.deidentify(real, new HashSet<>(), new HashSet<>());
+        String out = result.redactedText();
+        assertFalse(out.contains("Tina"));
+        assertFalse(out.contains("Raj"));
+        assertFalse(out.contains("3 March"));
+        assertFalse(out.matches(".*,\\s*34\\s*,.*"));
+        assertFalse(out.contains("aged 67"));
+    }
 }

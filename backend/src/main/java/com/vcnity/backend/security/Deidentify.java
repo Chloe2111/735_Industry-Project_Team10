@@ -39,6 +39,21 @@ import java.util.regex.Pattern;
  * The underlying matching logic is identical to the gazetteer's — the
  * separation is a governance/audit-trail choice, not a new algorithm.
  *
+ * v3 — adds THREE more detectors, closing a real gap found in a live
+ * end-to-end test: a real submission stored "Tina, 34, ... 3 March"
+ * with NONE of those three identifying details redacted, because:
+ *   - CAPITALISED_NAME_RE requires TWO consecutive capitalised words
+ *     ({1,2} after the first), so a single first name like "Tina"
+ *     never matched at all.
+ *   - There was no age detector of any kind.
+ *   - There was no date detector of any kind.
+ * SINGLE_NAME_RE, AGE_RE and DATE_RE below close these three gaps.
+ * As with the capitalised-name heuristic above, this trades some
+ * over-redaction of ordinary capitalised words for not missing real
+ * identifying details — consistent with how the rest of this module
+ * already treats that tradeoff (see the sentence-initial vernacular
+ * term test in DeidentifyTest.java, which accepts the same tradeoff).
+ *
  * Both term-list files ship with ONLY placeholder entries. DO NOT
  * deploy with the placeholder entries. The real lists must be built
  * with, and signed off by, the community whose material this is.
@@ -53,6 +68,61 @@ public final class Deidentify {
                     + "(?:\\+?61[ -]?)?\\(?0[2378]\\)?[ -]?\\d{4}[ -]?\\d{4}\\b");
 
     private static final Pattern CAPITALISED_NAME_RE = Pattern.compile("\\b[A-Z][a-z]+(?:\\s[A-Z][a-z]+){1,2}\\b");
+
+    // --- v3 additions ---
+
+    /**
+     * A single capitalised word, e.g. "Tina". Deliberately broad: a real
+     * first name can appear anywhere, so this is not restricted to
+     * sentence position. False positives (ordinary capitalised words,
+     * sentence starters) are accepted as the cost of not missing a real
+     * name — the same tradeoff CAPITALISED_NAME_RE already makes.
+     * Matches that are month names, or that overlap an already-kept
+     * longer match (e.g. the first word of a two-word name, or a date),
+     * are filtered out in findSingleNameHits below.
+     */
+    private static final Pattern SINGLE_NAME_RE = Pattern.compile("\\b[A-Z][a-z]+\\b");
+
+    private static final Set<String> MONTH_NAMES = Set.of(
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December");
+
+    /**
+     * A short, pragmatic list of very common sentence-starting words,
+     * to cut down the worst single-name false positives. Not
+     * exhaustive, and not meant to be — see the class-level note on
+     * why some over-redaction here is an accepted tradeoff.
+     */
+    private static final Set<String> COMMON_WORD_STOPLIST = Set.of(
+            "The", "This", "That", "These", "Those", "My", "Our", "Your", "Their",
+            "We", "It", "They", "She", "He", "I");
+
+    /**
+     * Ages, in three common forms:
+     *  - ", 34," — a bare number set off by commas (very common in
+     *    free-text submissions, e.g. "Tina, 34, said...")
+     *  - "aged 67"
+     *  - "34 years old" / "34-year-old"
+     */
+    private static final Pattern AGE_RE = Pattern.compile(
+            ",\\s*\\d{1,3}\\s*,"
+                    + "|\\baged\\s+\\d{1,3}\\b"
+                    + "|\\b\\d{1,3}[\\s-]year[s]?[\\s-]old\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Dates, in two common forms:
+     *  - day + month name, with an optional ordinal suffix, in either
+     *    order ("3 March", "3rd March", "March 3", "March 3rd")
+     *  - short numeric dates ("3/3/2026", "03-03-26")
+     */
+    private static final Pattern DATE_RE = Pattern.compile(
+            "\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:January|February|March|April|May|June|July|August"
+                    + "|September|October|November|December)\\b"
+                    + "|\\b(?:January|February|March|April|May|June|July|August|September|October"
+                    + "|November|December)\\s+\\d{1,2}(?:st|nd|rd|th)?\\b"
+                    + "|\\b\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}\\b",
+            Pattern.CASE_INSENSITIVE);
 
     private Deidentify() {
     }
@@ -129,6 +199,26 @@ public final class Deidentify {
         return hits;
     }
 
+    /**
+     * Single-name hits, with month names and the common-word stoplist
+     * filtered out before the result is returned. Overlaps with longer
+     * matches (two-word names, dates) are resolved later by the shared
+     * overlap-resolution step in deidentify(), the same as every other
+     * detector — this method only removes the obvious non-name words.
+     */
+    private static List<Entity> findSingleNameHits(String text) {
+        List<Entity> hits = new ArrayList<>();
+        Matcher m = SINGLE_NAME_RE.matcher(text);
+        while (m.find()) {
+            String word = m.group();
+            if (MONTH_NAMES.contains(word) || COMMON_WORD_STOPLIST.contains(word)) {
+                continue;
+            }
+            hits.add(new Entity(word, m.start(), m.end(), "single_name"));
+        }
+        return hits;
+    }
+
     public static DeidentificationResult deidentify(String text, Set<String> gazetteer, Set<String> vernacularTerms) {
         return deidentify(text, gazetteer, vernacularTerms, true);
     }
@@ -141,8 +231,11 @@ public final class Deidentify {
         entities.addAll(findPatternHits(text, PHONE_RE, "phone"));
         entities.addAll(findTermListHits(text, gazetteer, "gazetteer"));
         entities.addAll(findTermListHits(text, vernacularTerms, "vernacular"));
+        entities.addAll(findPatternHits(text, AGE_RE, "age"));
+        entities.addAll(findPatternHits(text, DATE_RE, "date"));
         if (redactCapitalisedNames) {
             entities.addAll(findPatternHits(text, CAPITALISED_NAME_RE, "capitalised_name"));
+            entities.addAll(findSingleNameHits(text));
         }
 
         entities.sort(Comparator.<Entity>comparingInt(Entity::start)
