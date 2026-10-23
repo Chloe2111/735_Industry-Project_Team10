@@ -1,7 +1,7 @@
 # VCNITY Portal – System Architecture and Runbook
 
 **Jira:** Story 30 (IFN735-185, 191, 192, 193, 194)
-**Applies to:** `main` at commit `448566c` (after PRs #25 and #26)
+**Applies to:** `main` at commit `30d0e54` (after PRs #25–#30 and the de-identification upgrade)
 **Audience:** the team, the tutor, and the client (Ehud). Anyone setting up the system for the first time should be able to follow Part B.
 
 > **Correction (Sub-task 30.1 / 30.2).** Earlier planning notes (Story 16 skeleton, backend integration plan) described the portal as "Spring Boot + Thymeleaf with session-based auth". That is out of date. The system that was built is a **React single-page app talking to a Spring Boot REST API**. There are no Thymeleaf templates and no Thymeleaf dependency in `backend/pom.xml`. Server-side pages were never built; every screen is a React route, and every piece of data comes from a `/api/...` JSON endpoint. There is no login yet: a temporary "Viewing as" switch chooses the portal.
@@ -14,7 +14,7 @@
 
 ```
  Browser (React 18 + Vite, port 5173)
- ├── Community portal   /community          (Submit an Idea, Share feedback, groups, posts)
+ ├── Community portal   /community          (Open commissions, Submit an Idea, Share feedback, groups, posts)
  ├── Facilitator portal /facilitator/...     (Exceptions queue, Coding findings)
  └── Client portal      /dashboard, /post-commission, /my-commissions, /reports-received  (Dashboard, Post a commission, My commissions, Reports received)
           │  all calls go to /api/...  (Vite proxies /api → http://localhost:8080)
@@ -45,16 +45,19 @@
 In Sprint 10 the team had two overlapping ways of coding feedback: the security module's `PipelineService` and Story 18's `BatchCodingJob`. They were merged into **one pipeline** (see `docs/Pipeline_Consolidation.md`). There is now only one route from a community submission to a finding:
 
 ```
-Community member submits text (Submit an Idea)
-  │  POST /api/intake/submissions {groupIds, text}
+Client posts a commission → community member opens it → Submit an Idea
+  │  POST /api/intake/submissions {groupIds, text, commissionId?}
   ▼
 1. Tier gate (TierGate)      Group tier looked up in group_tiers.
                              Tier 3 or untiered → REJECTED. The text never reaches the AI.
 2. Transcribe                Text passes through (audio/photo is out of scope for the MVP).
-3. De-identify (Deidentify)  Gazetteer names, vernacular terms and capitalised 2–3-word
-                             names are replaced before anything leaves the server.
+3. De-identify (Deidentify)  Emails, phone numbers, gazetteer names, vernacular terms,
+                             capitalised 2–3-word names, single first names, ages and
+                             dates are replaced before anything leaves the server.
 4. AI coding                 PipelineService → BatchCodingJob → Claude (or mock coder).
                              Produces CodedFinding records (theme, quote, confidence, tier).
+                             The prompt gives a confidence scale and a no-idea rule: text
+                             with no real idea comes back empty and goes to a person.
 5. Grounding (Grounding)     Each finding is checked: quote must appear in the source,
                              confidence ≥ 0.75, source present, tier 1 or 2.
 6. Coverage (CoverageCheck)  Reports NOT_ASSESSED / PARTIAL / GAPS / COMPLETE.
@@ -66,7 +69,9 @@ Community member submits text (Submit an Idea)
 7. Human check (Facilitator portal)
      Clear (approve) · Reject · Code it myself (for AI_COULD_NOT_CODE items)
   ▼
-8. Client portal → Reports received → "Community ideas" report
+8. Client portal → Reports received
+     One live report per commission the client posted, plus a general
+     "Community ideas" report for ideas not linked to a commission.
      Built only from PUBLISHED findings. Facilitator-coded findings are labelled
      "Coded by facilitator".
 ```
@@ -82,12 +87,12 @@ Rules that hold across the whole pipeline:
 
 | Package | Responsibility |
 |---|---|
-| `intake` | Submissions, group tiers, publishing, facilitator coding (`FacilitatorCodingController`). Store is `mongo` (default) or `memory` via `intake.store`. |
+| `intake` | Submissions (with the optional `commissionId` they answer), group tiers, publishing, facilitator coding (`FacilitatorCodingController`). Store is `mongo` (default) or `memory` via `intake.store`. |
 | `security` | The pipeline: `TierGate`, `Deidentify`, `PipelineService`, `BatchCodingJob`, `TranscriptCoder`, `Grounding`, `CoverageCheck`, `CodedFinding`. |
 | `exceptions` | Human review queue: list, clear, reject, code. |
 | `findings` | Read API over coded findings (switched on by `findings.api.enabled`). |
 | `community` | Groups, posts, memberships. |
-| `commission` | Client commissions. |
+| `commission` | Client commissions: create and list. |
 | `consent` | Consent records. |
 | `report` | Client reports, seeded from `reports-seed.json` by `ReportSeeder`. |
 | `common` | `ApiErrorHandler`: every error comes back as `{ "message": "..." }`. |
@@ -101,22 +106,22 @@ Rules that hold across the whole pipeline:
 | Exceptions | `GET /api/exceptions[?pendingOnly=true]` · `GET /api/exceptions/{id}` · `POST /api/exceptions` · `PATCH /api/exceptions/{id}/clear` · `PATCH /api/exceptions/{id}/reject` · `PATCH /api/exceptions/{id}/code` |
 | Findings | `GET /api/findings/{itemId}` · `GET /api/findings?sourceRef=&page=&size=` → `{findings, page, size, hasNext}` |
 | Community | `/api/community/groups` (POST, GET, GET/PUT/DELETE `/{id}`) · `/api/community/posts` (POST, GET, GET `/group/{groupId}`, GET/DELETE `/{id}`) · `/api/community/groups/{groupId}/members` (POST, GET, DELETE `/{userId}`) · `GET /api/community/users/{userId}/memberships` |
-| Client | `POST /api/commissions` · `GET /api/reports` · `GET /api/reports/{id}` |
+| Client | `POST /api/commissions` · `GET /api/commissions` (newest first) · `GET /api/reports` · `GET /api/reports/{id}` |
 | Consent | `POST /api/consent` |
 
 ### A5. MongoDB collections
 
 `intake_submissions`, `group_tiers`, `findings`, `commissions`, `reports`, `community_groups`, `community_posts`, `group_memberships`, `consents`.
-The exceptions queue is held in memory and is emptied when the backend restarts.
+The exceptions queue is held in memory. Items raised by community submissions are rebuilt from `intake_submissions` when the backend starts.
 
 ### A6. Configuration
 
 | Setting | Where | Default | Purpose |
 |---|---|---|---|
-| `MONGO_URI` | env var, or `application-local.properties` (git-ignored, `local` profile) | `mongodb://127.0.0.1:27017/client_portal` | Database |
+| `MONGO_URI` / `spring.data.mongodb.uri` | env var, or `application-local.properties` (git-ignored) used with `-Dspring-boot.run.profiles=local` | `mongodb://127.0.0.1:27017/client_portal` | Database. The team's shared Atlas cluster is in AWS Sydney (`AP_SOUTHEAST_2`). |
 | `PORT` | env var | `8080` | Backend port |
 | `ANTHROPIC_API_KEY` | env var only, never in code or commits | not set → mock coder | Turns on real AI coding |
-| `ANTHROPIC_MODEL` | env var | set in `PipelineService` | Which Claude model |
+| `ANTHROPIC_MODEL` | env var | `claude-sonnet-4-6` (code default) | Which Claude model. The team uses `claude-sonnet-5`, chosen in the Week 10 trial. |
 | `FINDINGS_API_ENABLED` | env var (`findings.api.enabled`) | `false` | Must be `true` for Reports received to show community ideas |
 | `intake.store` | property | `mongo` | `memory` for quick tests without a database |
 
@@ -125,11 +130,17 @@ Confidence threshold: `0.75`, in `Grounding.CONFIDENCE_THRESHOLD`. Change it onl
 ### A7. Known limits (state of `main` today)
 
 - No login or role-based access. The "Viewing as" switch is for demonstration only.
-- De-identification misses single first names, dates and ages, and the gazetteer is a placeholder. It must be extended before real data goes through.
-- The AI call is a direct call to the Anthropic API, not Bedrock in the Sydney region with zero data retention as the client's runbook asks.
-- The exceptions queue is in memory.
-- `PipelineService` still reads Claude's reply with a regular-expression text match instead of a JSON parser. If a theme or quote contains quotation marks, it comes back empty. Before the real run, the reply needs to be parsed as JSON (for example with Jackson) and the HTTP status checked. This fix has not been merged yet.
+- De-identification is pattern-based. It now removes single first names, ages and dates, but:
+  - a name at the **start of a sentence** with no comma after it ("Raj stopped coming") is not removed;
+  - names written in lowercase or all capitals ("sarah", "SARAH") are not removed (DEF-26-3, test BT-25 disabled);
+  - some ordinary capitalised words are removed as names (for example "However," or a place name);
+  - the gazetteer and vernacular lists are placeholders and must be built with the community.
+  A per-run names list, entered by the facilitator before a run, is the planned fix for the first two.
+- The confidence scale in the AI prompt is new. Before it, every live finding scored 0.90, including a meaningless idea, so the 0.75 check never triggered. Re-check with the live model that scores now vary and that vague ideas go to a person.
+- The AI call goes directly to the Anthropic API, not Bedrock in the Sydney region with zero data retention as the client's runbook asks.
 - Consent records are not yet linked to submissions.
+- Commissions have no assigned group or tier yet (My commissions shows "Pending"); the tier comes from each community group.
+- `BackendApplicationTests.contextLoads` needs a running MongoDB, because the report seeder reads the database at start-up.
 - Text only: photo and audio intake are out of MVP scope.
 
 ---
@@ -187,7 +198,7 @@ Then, as Community: Commissions → **Submit an Idea**, choose the group, and en
 
 ### Step 3 – Live model on synthetic text (the dry run)
 
-**RUN** Pull the latest `main` (it must include the JSON reply fix in A7). Start MongoDB. Then set the key and model in this terminal only, and start the backend:
+**RUN** Pull the latest `main`. To use the team's shared Atlas database, create `application-local.properties` (see A6) and add `"-Dspring-boot.run.profiles=local"` to the run command; otherwise start a local MongoDB. Then set the key and model in this terminal only, and start the backend:
 ```powershell
 git pull
 cd backend
@@ -205,7 +216,8 @@ Submit 3–5 synthetic ideas to the Tier 2 group through Submit an Idea. Note ea
 
 **RUN**
 - Submit an idea to the Tier 3 group from Step 3. It is still the live AI setup; the point is that the AI is never called. Untiered groups do not appear in Submit an Idea, so test them with `mvn test -Dtest=GuardrailBreakTest` (below).
-- Submit text with nothing to code (for example "ok"). Submit text that contains a made-up full name.
+- Submit text with nothing to code. Use wording that is not the prompt's own example, for example "not sure, whatever really". Submit text that contains a made-up name, age and date, both mid-sentence and at the start of a sentence.
+- To test the facilitator step on purpose, restart the backend with `$env:ANTHROPIC_MODEL = 'claude-test-invalid'`. Every idea then goes to the queue as **AI could not code**. Try **Approve & publish** (with a theme and supporting sentence) and **Reject** (with a reason). Set the model back afterwards.
 - Run the automated break tests: `mvn test -Dtest=GuardrailBreakTest` (see `docs/Story26_Guardrail_Break_Tests.md`).
 
 **EXPECT**
@@ -213,7 +225,7 @@ Submit 3–5 synthetic ideas to the Tier 2 group through Submit an Idea. Note ea
 - Nothing to code: appears in the queue as **AI could not code**. The facilitator can code it, and the report shows "Coded by facilitator".
 - Full name: replaced before coding. It does not appear in any finding.
 
-**CHECK** All break tests pass. No refused text appears in Coding findings or Reports received. With the live AI, the "nothing to code" item may still get a weak theme instead of AI could not code. If so, it should be flagged for low confidence. Either result is acceptable, so record which one happened.
+**CHECK** All break tests pass. No refused text appears in Coding findings or Reports received. The approved idea shows "Coded by facilitator" in the client report; the rejected one does not appear. Record any name, age or date that reaches the database unredacted (see A7).
 
 ### Step 5 – Calibrate
 
@@ -240,4 +252,11 @@ Submit 3–5 synthetic ideas to the Tier 2 group through Submit an Idea. Note ea
 | "Something went wrong" when submitting | Backend not running, or the group has no tier | Check `/api/health`; set a tier with `PUT /api/intake/group-tiers` |
 | `npm` is blocked in PowerShell | Execution policy blocks `npm.ps1` | Use `npm.cmd` |
 | Every finding has the theme "General feedback" | No API key, so the mock coder is running | Expected in Step 2; set the key for Step 3 |
-| Exceptions queue is empty after a restart | The queue is in memory | Expected; submit again |
+| Exceptions queue is empty after a restart | The queue is in memory | Community items are rebuilt at start-up; other items must be raised again |
+| `mvn` is not recognized | Maven not installed, or the window was opened before Maven was added to Path | Install Maven, then open a new window (or restart VS Code) |
+| `No plugin found for prefix 'spring-boot'` | Command run in the project folder, not `backend` | `cd backend` first |
+| `npm` error: could not read `package.json` | Command run in `backend`, not `frontend` | `cd frontend` first |
+| `Port 8080 was already in use` | An older backend is still running | Stop it (Ctrl+C), or end the process listening on 8080 |
+| Backend still uses `127.0.0.1:27017` with the `local` profile | `application-local.properties` is misnamed (e.g. `.txt`) or the line is wrong | The line must be `spring.data.mongodb.uri=mongodb+srv://…/client_portal?…` |
+| `SSLException: Received fatal alert: internal_error` to Atlas | Your IP address is not on the Atlas Network Access list | Ask the Atlas owner to add it |
+| Every idea becomes "AI could not code" | API error (wrong key or model, no credit) | Check the backend log for `Claude API returned HTTP 401/404/429` |
